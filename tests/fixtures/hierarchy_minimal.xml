@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[40,200][520,320]" class="android.widget.Button" text="Settings" content-desc="" clickable="true" long-clickable="false" scrollable="false" focusable="true" resource-id="com.example:id/settings_btn"/>
+    <node bounds="[40,360][520,480]" class="android.widget.Button" text="Wi-Fi" content-desc="" clickable="true" long-clickable="false" scrollable="false" focusable="true" resource-id="com.example:id/wifi_btn"/>
+    <node bounds="[40,520][1040,640]" class="android.widget.EditText" text="" content-desc="Search" clickable="true" long-clickable="false" scrollable="false" focusable="true" resource-id="com.example:id/search"/>
+    <node bounds="[40,680][1040,800]" class="android.widget.TextView" text="Welcome back" content-desc="" clickable="false" long-clickable="false" scrollable="false" focusable="false"/>
+    <node bounds="[40,820][1040,820]" class="android.widget.FrameLayout" clickable="false" long-clickable="false" scrollable="false"/>
+  </node>
+</hierarchy>

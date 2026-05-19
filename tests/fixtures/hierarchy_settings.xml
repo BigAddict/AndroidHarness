@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[0,0][1080,160]" class="android.widget.LinearLayout" clickable="false">
+      <node bounds="[40,40][400,120]" class="android.widget.TextView" text="Settings" clickable="false"/>
+    </node>
+    <node bounds="[0,160][1080,2400]" class="androidx.recyclerview.widget.RecyclerView" clickable="false" scrollable="true" resource-id="com.android.settings:id/main_content">
+      <node bounds="[40,200][1040,360]" class="android.widget.LinearLayout" clickable="true" resource-id="com.android.settings:id/network_row">
+        <node bounds="[80,240][1000,320]" class="android.widget.TextView" text="Network &amp; internet" clickable="false"/>
+      </node>
+      <node bounds="[40,380][1040,540]" class="android.widget.LinearLayout" clickable="true" resource-id="com.android.settings:id/display_row">
+        <node bounds="[80,420][1000,500]" class="android.widget.TextView" text="Display" clickable="false"/>
+      </node>
+      <node bounds="[40,560][1040,720]" class="android.widget.LinearLayout" clickable="true" long-clickable="true" resource-id="com.android.settings:id/about_row">
+        <node bounds="[80,600][1000,680]" class="android.widget.TextView" text="About phone" clickable="false"/>
+      </node>
+    </node>
+  </node>
+</hierarchy>
