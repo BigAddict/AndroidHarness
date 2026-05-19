@@ -1,7 +1,5 @@
-import pytest
 
 from androidharness.agent import Agent, RunResult
-
 
 HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy rotation="0">
@@ -14,10 +12,12 @@ HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 
 def test_agent_stops_on_done_success(fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
-    client = fake_gemini([
-        {"name": "tap", "args": {"id": 1}},
-        {"name": "done", "args": {"success": True, "reason": "ok"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
     agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
     result = agent.run("open settings")
     assert isinstance(result, RunResult)
@@ -39,29 +39,31 @@ def test_agent_returns_max_turns_when_budget_exhausted(fake_device, fake_gemini)
 
 def test_agent_validation_error_becomes_tool_result_turn(fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
-    client = fake_gemini([
-        {"name": "tap", "args": {"id": 999}},  # invalid
-        {"name": "done", "args": {"success": False, "reason": "gave up"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 999}},  # invalid
+            {"name": "done", "args": {"success": False, "reason": "gave up"}},
+        ]
+    )
     agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
     result = agent.run("try a bad id")
     assert result.status == "done"
     assert result.success is False
     # The validation error must have been surfaced back to the model as a tool result.
     second_call_contents = client.generate_calls[1]["contents"]
-    rendered = "\n".join(
-        part for turn in second_call_contents for part in [str(turn)]
-    )
+    rendered = "\n".join(part for turn in second_call_contents for part in [str(turn)])
     assert "999" in rendered
 
 
 def test_agent_show_screen_attaches_screenshot_next_turn(fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
     fake_device.screenshot_bytes = b"PNGDATA"
-    client = fake_gemini([
-        {"name": "show_screen", "args": {}},
-        {"name": "done", "args": {"success": True, "reason": "saw screen"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "show_screen", "args": {}},
+            {"name": "done", "args": {"success": True, "reason": "saw screen"}},
+        ]
+    )
     agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
     agent.run("look")
     # Turn 1 should not have screenshotted yet.
@@ -72,10 +74,12 @@ def test_agent_show_screen_attaches_screenshot_next_turn(fake_device, fake_gemin
 
 def test_agent_records_each_turn(fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
-    client = fake_gemini([
-        {"name": "tap", "args": {"id": 1}},
-        {"name": "done", "args": {"success": True, "reason": "ok"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
     agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
     result = agent.run("open settings")
     assert len(result.turn_log) == 2

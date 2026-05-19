@@ -4,7 +4,7 @@ import json
 import secrets
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +21,7 @@ class RunOutcome:
 
 
 def _new_run_dir(root: Path) -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     short = secrets.token_hex(3)
     p = root / f"{stamp}-{short}"
     p.mkdir(parents=True, exist_ok=False)
@@ -43,8 +43,11 @@ def run_task(
     start = time.time()
 
     agent = Agent(
-        device=device, client=client, model=model,
-        max_turns=max_turns, wall_clock_s=wall_clock_s,
+        device=device,
+        client=client,
+        model=model,
+        max_turns=max_turns,
+        wall_clock_s=wall_clock_s,
     )
 
     result = agent.run(task)
@@ -62,22 +65,32 @@ def run_task(
                 turn["screenshot_path"] = str(ss_path.relative_to(run_dir))
             f.write(json.dumps(turn, default=str) + "\n")
 
-    (run_dir / "meta.json").write_text(json.dumps({
-        "task": task,
-        "model": model,
-        "device": {"serial": device.serial, "model": device.model},
-        "started_at": start,
-        "ended_at": time.time(),
-        "max_turns": max_turns,
-        "wall_clock_s": wall_clock_s,
-    }, indent=2))
+    (run_dir / "meta.json").write_text(
+        json.dumps(
+            {
+                "task": task,
+                "model": model,
+                "device": {"serial": device.serial, "model": device.model},
+                "started_at": start,
+                "ended_at": time.time(),
+                "max_turns": max_turns,
+                "wall_clock_s": wall_clock_s,
+            },
+            indent=2,
+        )
+    )
 
-    (run_dir / "result.json").write_text(json.dumps({
-        "status": result.status,
-        "success": result.success,
-        "reason": result.reason,
-        "turns": result.turns,
-    }, indent=2))
+    (run_dir / "result.json").write_text(
+        json.dumps(
+            {
+                "status": result.status,
+                "success": result.success,
+                "reason": result.reason,
+                "turns": result.turns,
+            },
+            indent=2,
+        )
+    )
 
     return RunOutcome(
         run_dir=str(run_dir),

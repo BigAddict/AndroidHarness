@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -28,12 +27,12 @@ def devices_cmd() -> None:
 @app.command("run")
 def run_cmd(
     task: str = typer.Argument(..., help="Natural-language task to drive on the device."),
-    serial: Optional[str] = typer.Option(None, "--serial", "-s"),
-    device_index: Optional[int] = typer.Option(None, "--device-index", "-i"),
+    serial: str | None = typer.Option(None, "--serial", "-s"),
+    device_index: int | None = typer.Option(None, "--device-index", "-i"),
     model: str = typer.Option("gemini-2.5-flash", "--model"),
     max_turns: int = typer.Option(40, "--max-turns"),
     wall_clock: float = typer.Option(600.0, "--wall-clock"),
-    runs_dir: Path = typer.Option(Path("./runs"), "--run-dir"),
+    runs_dir: Path = typer.Option("./runs", "--run-dir"),
 ) -> None:
     if serial and device_index is not None:
         typer.echo("error: --serial and --device-index are mutually exclusive", err=True)

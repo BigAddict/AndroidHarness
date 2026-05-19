@@ -102,7 +102,10 @@ def _own_label(elem: etree._Element) -> str:
 
 
 def _collect_descendant_text(elem: etree._Element) -> str:
-    """Collect text from non-interactable descendants only (depth-first, first label wins per branch)."""
+    """Collect text from non-interactable descendants only.
+
+    Depth-first traversal; first label wins per branch.
+    """
     parts: list[str] = []
     for child in elem:
         if child.tag != "node":

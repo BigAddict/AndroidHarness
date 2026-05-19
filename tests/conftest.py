@@ -66,8 +66,12 @@ class FakeGeminiClient:
 
     def generate(self, *, model, system_instruction, contents, tools):
         self.generate_calls.append(
-            {"model": model, "system_instruction": system_instruction,
-             "contents": contents, "tools": tools}
+            {
+                "model": model,
+                "system_instruction": system_instruction,
+                "contents": contents,
+                "tools": tools,
+            }
         )
         idx = self._script.index
         if idx >= len(self._script.tool_calls):
@@ -80,4 +84,5 @@ class FakeGeminiClient:
 def fake_gemini():
     def _make(tool_calls):
         return FakeGeminiClient(tool_calls=tool_calls)
+
     return _make

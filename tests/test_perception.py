@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from androidharness.perception import Node, Observation, parse_hierarchy
+from androidharness.perception import Node, parse_hierarchy
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -51,7 +51,7 @@ def test_settings_fixture_drops_pure_layout_containers():
     summaries = [n.summary for n in obs.nodes]
     assert summaries == [
         '[1] TextView "Settings"',
-        '[2] RecyclerView (scrollable)',
+        "[2] RecyclerView (scrollable)",
         '[3] LinearLayout "Network & internet" (clickable)',
         '[4] LinearLayout "Display" (clickable)',
         '[5] LinearLayout "About phone" (clickable, long-clickable)',

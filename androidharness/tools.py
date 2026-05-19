@@ -42,9 +42,7 @@ def _require_id(args: dict, obs: Observation) -> int | ToolError:
         obs.resolve(node_id)
     except KeyError:
         valid = [n.id for n in obs.nodes]
-        return ToolError(
-            f"id {node_id} not in current tree; valid ids are {valid}"
-        )
+        return ToolError(f"id {node_id} not in current tree; valid ids are {valid}")
     return node_id
 
 

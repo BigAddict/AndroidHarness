@@ -3,7 +3,6 @@ from pathlib import Path
 
 from androidharness.runner import run_task
 
-
 HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy rotation="0">
   <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
@@ -15,10 +14,12 @@ HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 
 def test_run_task_writes_meta_turns_and_result(tmp_path, fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
-    client = fake_gemini([
-        {"name": "tap", "args": {"id": 1}},
-        {"name": "done", "args": {"success": True, "reason": "ok"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
     result = run_task(
         task="open settings",
         device=fake_device,
@@ -50,10 +51,12 @@ def test_run_task_writes_meta_turns_and_result(tmp_path, fake_device, fake_gemin
 def test_run_task_writes_screenshot_only_when_requested(tmp_path, fake_device, fake_gemini):
     fake_device.hierarchy_xml = HIERARCHY
     fake_device.screenshot_bytes = b"PNGDATA"
-    client = fake_gemini([
-        {"name": "show_screen", "args": {}},
-        {"name": "done", "args": {"success": True, "reason": "ok"}},
-    ])
+    client = fake_gemini(
+        [
+            {"name": "show_screen", "args": {}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
     result = run_task(
         task="look",
         device=fake_device,

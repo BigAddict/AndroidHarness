@@ -30,9 +30,7 @@ class DeviceInfo:
 
 
 def list_devices() -> list[DeviceInfo]:
-    out = subprocess.run(
-        ["adb", "devices"], capture_output=True, text=True, check=True
-    ).stdout
+    out = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
     serials = [
         line.split("\t", 1)[0]
         for line in out.splitlines()[1:]
@@ -41,10 +39,15 @@ def list_devices() -> list[DeviceInfo]:
     infos: list[DeviceInfo] = []
     for serial in serials:
         try:
-            model = subprocess.run(
-                ["adb", "-s", serial, "shell", "getprop", "ro.product.model"],
-                capture_output=True, text=True, check=True,
-            ).stdout.strip() or "unknown"
+            model = (
+                subprocess.run(
+                    ["adb", "-s", serial, "shell", "getprop", "ro.product.model"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
+                or "unknown"
+            )
         except subprocess.CalledProcessError:
             model = "unknown"
         infos.append(DeviceInfo(serial=serial, model=model))
@@ -61,7 +64,7 @@ class UIAutomatorDevice:
         self._d = u2_device
 
     @classmethod
-    def connect(cls, serial: str) -> "UIAutomatorDevice":
+    def connect(cls, serial: str) -> UIAutomatorDevice:
         d = u2.connect(serial)
         model = d.info.get("productName") or d.shell("getprop ro.product.model").output.strip()
         return cls(serial=serial, u2_device=d, model=model or "unknown")
@@ -71,6 +74,7 @@ class UIAutomatorDevice:
 
     def screenshot(self) -> bytes:
         import io
+
         buf = io.BytesIO()
         self._d.screenshot().save(buf, format="PNG")
         return buf.getvalue()

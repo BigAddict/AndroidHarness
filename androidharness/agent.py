@@ -8,7 +8,6 @@ from androidharness.perception import parse_hierarchy
 from androidharness.tools import (
     GEMINI_FUNCTION_DECLARATIONS,
     ToolCall,
-    ToolError,
     ToolResult,
     execute,
 )
@@ -22,15 +21,18 @@ Each turn you receive:
 
 Rules:
   * Always act through the provided tools — never describe an action without calling a tool.
-  * Refer to UI elements by their [id] from the current Observation only. Ids are not stable across turns.
-  * If the UI tree does not contain enough information, call show_screen() to get a screenshot on the next turn.
+  * Refer to UI elements by their [id] from the current Observation only.
+    Ids are not stable across turns.
+  * If the UI tree does not contain enough information, call show_screen() to get a screenshot
+    on the next turn.
   * When the task is complete (or definitively impossible), call done(success, reason).
   * Prefer the smallest sequence of actions that achieves the task."""
 
 
 class GeminiClient(Protocol):
-    def generate(self, *, model: str, system_instruction: str,
-                 contents: list, tools: list) -> dict: ...
+    def generate(
+        self, *, model: str, system_instruction: str, contents: list, tools: list
+    ) -> dict: ...
 
 
 @dataclass
@@ -58,8 +60,13 @@ class Agent:
 
         for turn_idx in range(1, self.max_turns + 1):
             if time.monotonic() - started > self.wall_clock_s:
-                return RunResult(status="timeout", success=None, reason="wall clock",
-                                 turns=turn_idx - 1, turn_log=turn_log)
+                return RunResult(
+                    status="timeout",
+                    success=None,
+                    reason="wall clock",
+                    turns=turn_idx - 1,
+                    turn_log=turn_log,
+                )
 
             xml = self.device.dump_hierarchy()
             obs = parse_hierarchy(xml)
@@ -87,13 +94,15 @@ class Agent:
             }
             contents.append(tool_result_payload)
 
-            turn_log.append({
-                "turn": turn_idx,
-                "observation_summary": obs.render(),
-                "observation_payload": obs_payload,
-                "tool_call": {"name": call.name, "args": call.args},
-                "tool_result": tool_result_payload,
-            })
+            turn_log.append(
+                {
+                    "turn": turn_idx,
+                    "observation_summary": obs.render(),
+                    "observation_payload": obs_payload,
+                    "tool_call": {"name": call.name, "args": call.args},
+                    "tool_result": tool_result_payload,
+                }
+            )
 
             if isinstance(result, ToolResult):
                 if result.is_done:
@@ -107,8 +116,13 @@ class Agent:
                 if result.requests_screenshot:
                     needs_screenshot = True
 
-        return RunResult(status="max_turns", success=None, reason="max turns reached",
-                         turns=self.max_turns, turn_log=turn_log)
+        return RunResult(
+            status="max_turns",
+            success=None,
+            reason="max turns reached",
+            turns=self.max_turns,
+            turn_log=turn_log,
+        )
 
 
 class GoogleGenaiClient:
@@ -116,6 +130,7 @@ class GoogleGenaiClient:
 
     def __init__(self, api_key: str | None = None):
         from google import genai
+
         self._genai = genai
         self._client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
@@ -129,21 +144,23 @@ class GoogleGenaiClient:
         for entry in contents:
             role = entry.get("role", "context")
             if role == "user":
-                parts.append(types.Part.from_text(f"Task: {entry.get('task','')}"))
+                parts.append(types.Part.from_text(f"Task: {entry.get('task', '')}"))
             elif role == "observation":
-                parts.append(types.Part.from_text(f"Observation:\n{entry.get('text','')}"))
+                parts.append(types.Part.from_text(f"Observation:\n{entry.get('text', '')}"))
                 shot = entry.get("screenshot")
                 if shot:
                     parts.append(types.Part.from_bytes(data=shot, mime_type="image/png"))
             elif role == "tool_result":
-                parts.append(types.Part.from_text(
-                    f"Previous tool {entry.get('tool')} -> "
-                    f"{'ok' if entry.get('ok') else 'error'}: {entry.get('message','')}"
-                ))
+                parts.append(
+                    types.Part.from_text(
+                        f"Previous tool {entry.get('tool')} -> "
+                        f"{'ok' if entry.get('ok') else 'error'}: {entry.get('message', '')}"
+                    )
+                )
 
-        gemini_tools = [types.Tool(function_declarations=[
-            types.FunctionDeclaration(**fd) for fd in tools
-        ])]
+        gemini_tools = [
+            types.Tool(function_declarations=[types.FunctionDeclaration(**fd) for fd in tools])
+        ]
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=gemini_tools,
@@ -165,6 +182,4 @@ class GoogleGenaiClient:
                     return {"name": fc.name, "args": dict(fc.args or {})}
 
         # Model spoke without calling a tool — surface as done(success=False).
-        return {"name": "done",
-                "args": {"success": False,
-                         "reason": "model did not call a tool"}}
+        return {"name": "done", "args": {"success": False, "reason": "model did not call a tool"}}

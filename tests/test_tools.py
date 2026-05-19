@@ -65,9 +65,7 @@ def test_type_replace_true_passes_through(fake_device, obs):
 
 
 def test_swipe_unknown_direction_is_validation_error(fake_device, obs):
-    result = execute(
-        fake_device, ToolCall(name="swipe", args={"direction": "diagonal"}), obs
-    )
+    result = execute(fake_device, ToolCall(name="swipe", args={"direction": "diagonal"}), obs)
     assert isinstance(result, ToolError)
     assert fake_device.calls == []
 
@@ -88,9 +86,7 @@ def test_scroll_resolves_id_to_center(fake_device, obs):
 
 
 def test_press_key_whitelist_rejects_arbitrary(fake_device, obs):
-    result = execute(
-        fake_device, ToolCall(name="press_key", args={"name": "power"}), obs
-    )
+    result = execute(fake_device, ToolCall(name="press_key", args={"name": "power"}), obs)
     assert isinstance(result, ToolError)
     assert fake_device.calls == []
 
@@ -133,6 +129,13 @@ def test_unknown_tool_is_validation_error(fake_device, obs):
 def test_gemini_schema_has_all_tools():
     names = {decl["name"] for decl in GEMINI_FUNCTION_DECLARATIONS}
     assert names == {
-        "tap", "long_press", "type", "swipe", "scroll",
-        "press_key", "wait", "show_screen", "done",
+        "tap",
+        "long_press",
+        "type",
+        "swipe",
+        "scroll",
+        "press_key",
+        "wait",
+        "show_screen",
+        "done",
     }
