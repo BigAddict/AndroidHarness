@@ -109,3 +109,62 @@ class Agent:
 
         return RunResult(status="max_turns", success=None, reason="max turns reached",
                          turns=self.max_turns, turn_log=turn_log)
+
+
+class GoogleGenaiClient:
+    """Adapter over google-genai that returns the first function call from a response."""
+
+    def __init__(self, api_key: str | None = None):
+        from google import genai
+        self._genai = genai
+        self._client = genai.Client(api_key=api_key) if api_key else genai.Client()
+
+    def generate(self, *, model, system_instruction, contents, tools):
+        from google.genai import types
+
+        # Flatten our internal `contents` (list of dicts) into a simple user message
+        # plus any image bytes. v1 keeps this lossy-but-faithful: each entry becomes
+        # a labeled text part; screenshots are added as inline_data.
+        parts: list[Any] = []
+        for entry in contents:
+            role = entry.get("role", "context")
+            if role == "user":
+                parts.append(types.Part.from_text(f"Task: {entry.get('task','')}"))
+            elif role == "observation":
+                parts.append(types.Part.from_text(f"Observation:\n{entry.get('text','')}"))
+                shot = entry.get("screenshot")
+                if shot:
+                    parts.append(types.Part.from_bytes(data=shot, mime_type="image/png"))
+            elif role == "tool_result":
+                parts.append(types.Part.from_text(
+                    f"Previous tool {entry.get('tool')} -> "
+                    f"{'ok' if entry.get('ok') else 'error'}: {entry.get('message','')}"
+                ))
+
+        gemini_tools = [types.Tool(function_declarations=[
+            types.FunctionDeclaration(**fd) for fd in tools
+        ])]
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            tools=gemini_tools,
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode="ANY")
+            ),
+        )
+        response = self._client.models.generate_content(
+            model=model,
+            contents=[types.Content(role="user", parts=parts)],
+            config=config,
+        )
+
+        # Find the first function call in the response.
+        for cand in response.candidates or []:
+            for part in (cand.content.parts if cand.content else []) or []:
+                fc = getattr(part, "function_call", None)
+                if fc and fc.name:
+                    return {"name": fc.name, "args": dict(fc.args or {})}
+
+        # Model spoke without calling a tool — surface as done(success=False).
+        return {"name": "done",
+                "args": {"success": False,
+                         "reason": "model did not call a tool"}}
