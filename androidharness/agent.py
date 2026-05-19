@@ -28,8 +28,44 @@ Rules:
     Ids are not stable across turns.
   * If the UI tree does not contain enough information, call show_screen() to get a screenshot
     on the next turn.
+  * For whole-screen scrolling (app drawer, long page, settings list) prefer
+    swipe(direction='up') over scroll(). Only use scroll(id=N) when the target node's
+    class clearly names a scrollable container such as RecyclerView, ListView, or
+    ScrollView — never use scroll on a FrameLayout / ViewGroup / launcher root, which
+    on many phones is treated as a dismiss gesture rather than a scroll.
+  * Prefer answering the user's question without installing new apps. Only install an
+    app when there is no on-device path (existing app, settings screen, system info)
+    that would produce the answer.
+  * If a previous tool returned a NO_PROGRESS warning, do NOT repeat the same call.
+    Switch tactics: call show_screen() if the tree is unclear, pick a different element,
+    swap scroll for swipe (or vice versa), or press_key('back') to escape.
   * When the task is complete (or definitively impossible), call done(success, reason).
   * Prefer the smallest sequence of actions that achieves the task."""
+
+_NO_PROGRESS_WINDOW = 3  # warn after this many identical calls with no UI change
+
+
+def _signature(args: dict) -> tuple:
+    """Hashable signature of a tool call's args. Args are primitives in v1."""
+    return tuple(sorted(args.items(), key=lambda kv: kv[0]))
+
+
+def _is_stalled(turn_log: list[dict], current_obs_render: str) -> bool:
+    """Return True if the last N turns made the same call AND the observation
+    hasn't changed across that window."""
+    if len(turn_log) < _NO_PROGRESS_WINDOW:
+        return False
+    recent = turn_log[-_NO_PROGRESS_WINDOW:]
+    first_sig = (
+        recent[0]["tool_call"]["name"],
+        _signature(recent[0]["tool_call"]["args"]),
+    )
+    same_call = all(
+        (t["tool_call"]["name"], _signature(t["tool_call"]["args"])) == first_sig
+        for t in recent
+    )
+    same_obs = all(t["observation_summary"] == current_obs_render for t in recent)
+    return same_call and same_obs
 
 
 class GeminiClient(Protocol):
@@ -83,6 +119,21 @@ class Agent:
                           turn_idx, len(obs_payload["screenshot"]))
             contents.append(obs_payload)
             _log.info("turn %d: observation has %d nodes", turn_idx, len(obs.nodes))
+
+            if _is_stalled(turn_log, obs.render()):
+                last = turn_log[-1]["tool_call"]
+                warning = (
+                    f"NO_PROGRESS: the last {_NO_PROGRESS_WINDOW} turns all called "
+                    f"{last['name']}({last['args']}) and the Observation did not change. "
+                    "Switch tactics — try show_screen(), a different element id, swap "
+                    "scroll for swipe (or vice versa), or press_key('back') to escape."
+                )
+                contents.append({
+                    "role": "tool_result", "tool": "system",
+                    "ok": False, "message": warning,
+                })
+                _log.warning("no-progress loop at turn %d (%dx %s, obs unchanged)",
+                             turn_idx, _NO_PROGRESS_WINDOW, last["name"])
 
             raw = self.client.generate(
                 model=self.model,

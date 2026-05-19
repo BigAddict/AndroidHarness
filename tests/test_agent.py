@@ -87,3 +87,28 @@ def test_agent_records_each_turn(fake_device, fake_gemini):
     assert result.turn_log[1]["tool_call"]["name"] == "done"
     assert "observation_summary" in result.turn_log[0]
     assert "tool_result" in result.turn_log[0]
+
+
+def test_no_progress_warning_injected_after_3_identical_stalled_turns(
+    fake_device, fake_gemini
+):
+    # FakeDevice returns the same hierarchy on every dump → observation never changes.
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},  # turn 1
+            {"name": "tap", "args": {"id": 1}},  # turn 2
+            {"name": "tap", "args": {"id": 1}},  # turn 3 — completes the 3x stall window
+            {"name": "tap", "args": {"id": 1}},  # turn 4 — warning must be in contents now
+            {"name": "done", "args": {"success": False, "reason": "gave up"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    agent.run("stuck")
+    fourth_call_contents = client.generate_calls[3]["contents"]
+    serialized = " ".join(str(c) for c in fourth_call_contents)
+    assert "NO_PROGRESS" in serialized
+
+    # And the first call should NOT have a warning — nothing to detect yet.
+    first_call_contents = client.generate_calls[0]["contents"]
+    assert "NO_PROGRESS" not in " ".join(str(c) for c in first_call_contents)

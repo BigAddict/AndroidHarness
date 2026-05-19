@@ -65,11 +65,14 @@ class FakeGeminiClient:
         self.generate_calls: list[dict] = []
 
     def generate(self, *, model, system_instruction, contents, tools):
+        # Snapshot contents at call time. The agent reuses and mutates the same
+        # list across turns; without a copy here every recorded call would
+        # reflect the final state, which makes per-turn assertions impossible.
         self.generate_calls.append(
             {
                 "model": model,
                 "system_instruction": system_instruction,
-                "contents": contents,
+                "contents": list(contents),
                 "tools": tools,
             }
         )
