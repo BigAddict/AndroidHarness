@@ -144,17 +144,21 @@ class GoogleGenaiClient:
         for entry in contents:
             role = entry.get("role", "context")
             if role == "user":
-                parts.append(types.Part.from_text(f"Task: {entry.get('task', '')}"))
+                parts.append(types.Part.from_text(text=f"Task: {entry.get('task', '')}"))
             elif role == "observation":
-                parts.append(types.Part.from_text(f"Observation:\n{entry.get('text', '')}"))
+                parts.append(
+                    types.Part.from_text(text=f"Observation:\n{entry.get('text', '')}")
+                )
                 shot = entry.get("screenshot")
                 if shot:
                     parts.append(types.Part.from_bytes(data=shot, mime_type="image/png"))
             elif role == "tool_result":
                 parts.append(
                     types.Part.from_text(
-                        f"Previous tool {entry.get('tool')} -> "
-                        f"{'ok' if entry.get('ok') else 'error'}: {entry.get('message', '')}"
+                        text=(
+                            f"Previous tool {entry.get('tool')} -> "
+                            f"{'ok' if entry.get('ok') else 'error'}: {entry.get('message', '')}"
+                        )
                     )
                 )
 
