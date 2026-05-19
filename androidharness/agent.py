@@ -90,6 +90,7 @@ class Agent:
             turn_log.append({
                 "turn": turn_idx,
                 "observation_summary": obs.render(),
+                "observation_payload": obs_payload,
                 "tool_call": {"name": call.name, "args": call.args},
                 "tool_result": tool_result_payload,
             })
