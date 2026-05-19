@@ -25,6 +25,7 @@ name = "androidharness"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "adbutils" },
     { name = "google-genai" },
     { name = "lxml" },
     { name = "pillow" },
@@ -41,6 +42,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "adbutils", extras = ["apk"], specifier = ">=2.12.0" },
     { name = "google-genai", specifier = ">=0.3.0" },
     { name = "lxml", specifier = ">=5.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
