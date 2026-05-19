@@ -84,8 +84,7 @@ def _attr_bool(elem: etree._Element, name: str) -> bool:
 
 
 def _is_editable(elem: etree._Element) -> bool:
-    cls = elem.get("class", "")
-    return "EditText" in cls or cls.endswith(".EditText")
+    return "EditText" in elem.get("class", "")
 
 
 def _is_interactable(elem: etree._Element) -> bool:
@@ -121,91 +120,95 @@ def _collect_descendant_text(elem: etree._Element) -> str:
     return " ".join(parts)
 
 
-def _walk(
-    elem: etree._Element,
-    obs: Observation,
-    next_id_ref: list[int],
-    skip_non_interactable_text: bool,
-) -> None:
-    """
-    Recursively process a node element.
-
-    skip_non_interactable_text:
-        When True, this element is a non-interactable text descendant of an
-        already-emitted interactable parent — skip emitting it, but still
-        recurse into children that may be independently interactable.
-    """
-    interactable = _is_interactable(elem)
-    own_label = _own_label(elem)
-    editable = _is_editable(elem)
-
-    if skip_non_interactable_text and not interactable:
-        # This node's text was consumed by parent — skip, but recurse for
-        # interactable children.
-        for child in elem:
-            if child.tag == "node":
-                _walk(child, obs, next_id_ref, skip_non_interactable_text=False)
-        return
-
-    # Determine effective label
-    if interactable and not own_label:
-        effective_label = _collect_descendant_text(elem)
-    else:
-        effective_label = own_label
-
-    has_label = bool(effective_label)
-
-    if not (interactable or has_label):
-        # Pure structural container — skip, recurse into children normally
-        for child in elem:
-            if child.tag == "node":
-                _walk(child, obs, next_id_ref, skip_non_interactable_text=False)
-        return
-
-    # This node qualifies — emit it.
-    # For EditText: suppress clickable from traits (editable subsumes it).
-    # The clickable attribute is stored faithfully, but for summary purposes
-    # the spec shows EditText as (editable) only.
-    # We handle this in Node.summary: editable nodes suppress clickable display.
-
-    own_text = elem.get("text", "") or ""
-    own_content_desc = elem.get("content-desc", "") or ""
-
-    # If the effective label came from descendants, put it in text field
-    # (own_text and own_content_desc are both empty in that case).
-    display_text = own_text if own_text else (effective_label if not own_content_desc else "")
-    display_content_desc = own_content_desc
-
-    node = Node(
-        id=next_id_ref[0],
-        class_name=elem.get("class", ""),
-        text=display_text,
-        content_desc=display_content_desc,
-        resource_id=elem.get("resource-id", "") or "",
-        bounds=_parse_bounds(elem.get("bounds", "")),
-        clickable=_attr_bool(elem, "clickable"),
-        long_clickable=_attr_bool(elem, "long-clickable"),
-        scrollable=_attr_bool(elem, "scrollable"),
-        editable=editable,
-    )
-    obs.nodes.append(node)
-    next_id_ref[0] += 1
-
-    # Determine child processing mode:
-    # If we absorbed descendant text (interactable with no own label), mark
-    # non-interactable text children as skip so they aren't double-emitted.
-    child_skip = interactable and not own_label and bool(effective_label)
-
-    for child in elem:
-        if child.tag == "node":
-            _walk(child, obs, next_id_ref, skip_non_interactable_text=child_skip)
-
-
 def parse_hierarchy(xml: str) -> Observation:
     root = etree.fromstring(xml.encode("utf-8"))
     obs = Observation()
-    next_id_ref = [1]
+    next_id = 1
+
+    def walk(elem: etree._Element, *, suppress_text: bool) -> None:
+        """
+        Recursively process a node element.
+
+        suppress_text:
+            True only when this element is a non-interactable descendant whose
+            text was already absorbed into a parent's label.  In that case we
+            skip emitting a node for this element but still recurse into any
+            children that are independently interactable (suppress_text resets
+            to False for those children).
+        """
+        nonlocal next_id
+
+        interactable = _is_interactable(elem)
+        own_label = _own_label(elem)
+        editable = _is_editable(elem)
+
+        if suppress_text and not interactable:
+            # Text consumed by parent — skip this node, but let interactable
+            # grandchildren through (suppress_text=False for them).
+            for child in elem:
+                if child.tag == "node":
+                    walk(child, suppress_text=False)
+            return
+
+        # Determine effective label.
+        if interactable and not own_label:
+            effective_label = _collect_descendant_text(elem)
+        else:
+            effective_label = own_label
+
+        has_label = bool(effective_label)
+
+        if not (interactable or has_label):
+            # Pure structural container — skip, recurse normally.
+            for child in elem:
+                if child.tag == "node":
+                    walk(child, suppress_text=False)
+            return
+
+        # This node qualifies — emit it.
+        own_text = elem.get("text", "") or ""
+        own_content_desc = elem.get("content-desc", "") or ""
+
+        # Three distinct cases for display_text:
+        #   1. The element has its own text — use it directly.
+        #   2. No own text, but also no content-desc — effective_label came
+        #      from absorbed descendants; surface it as text.
+        #   3. No own text, but has a content-desc — leave text empty so the
+        #      content-desc field carries the label on its own.
+        if own_text:
+            display_text = own_text
+        elif not own_content_desc:
+            display_text = effective_label
+        else:
+            display_text = ""
+
+        display_content_desc = own_content_desc
+
+        node = Node(
+            id=next_id,
+            class_name=elem.get("class", ""),
+            text=display_text,
+            content_desc=display_content_desc,
+            resource_id=elem.get("resource-id", "") or "",
+            bounds=_parse_bounds(elem.get("bounds", "")),
+            clickable=_attr_bool(elem, "clickable"),
+            long_clickable=_attr_bool(elem, "long-clickable"),
+            scrollable=_attr_bool(elem, "scrollable"),
+            editable=editable,
+        )
+        obs.nodes.append(node)
+        next_id += 1
+
+        # Children of a node that absorbed descendant text should have their
+        # non-interactable text nodes suppressed to avoid double-emission.
+        absorbed = interactable and not own_label and bool(effective_label)
+
+        for child in elem:
+            if child.tag == "node":
+                walk(child, suppress_text=absorbed)
+
     for child in root:
         if child.tag == "node":
-            _walk(child, obs, next_id_ref, skip_non_interactable_text=False)
+            walk(child, suppress_text=False)
+
     return obs
