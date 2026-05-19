@@ -30,7 +30,9 @@ class DeviceInfo:
 
 
 def list_devices() -> list[DeviceInfo]:
-    out = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(
+        ["adb", "devices"], capture_output=True, text=True, check=True, timeout=5
+    ).stdout
     serials = [
         line.split("\t", 1)[0]
         for line in out.splitlines()[1:]
@@ -45,6 +47,7 @@ def list_devices() -> list[DeviceInfo]:
                     capture_output=True,
                     text=True,
                     check=True,
+                    timeout=5,
                 ).stdout.strip()
                 or "unknown"
             )

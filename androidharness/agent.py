@@ -98,7 +98,7 @@ class Agent:
                 {
                     "turn": turn_idx,
                     "observation_summary": obs.render(),
-                    "observation_payload": obs_payload,
+                    "observation_payload": dict(obs_payload),  # shallow copy; runner may mutate
                     "tool_call": {"name": call.name, "args": call.args},
                     "tool_result": tool_result_payload,
                 }
@@ -168,11 +168,32 @@ class GoogleGenaiClient:
                 function_calling_config=types.FunctionCallingConfig(mode="ANY")
             ),
         )
-        response = self._client.models.generate_content(
-            model=model,
-            contents=[types.Content(role="user", parts=parts)],
-            config=config,
-        )
+        import time as _time
+
+        from google.genai import errors as _errors
+
+        _TRANSIENT_INDICATORS = ("429", "500", "502", "503", "504")
+        last_exc: Exception | None = None
+        response = None
+        for attempt in range(4):
+            try:
+                response = self._client.models.generate_content(
+                    model=model,
+                    contents=[types.Content(role="user", parts=parts)],
+                    config=config,
+                )
+                break
+            except _errors.APIError as exc:
+                msg = str(exc)
+                if any(code in msg for code in _TRANSIENT_INDICATORS):
+                    last_exc = exc
+                    _time.sleep(2**attempt)
+                else:
+                    raise
+            except Exception:
+                raise
+        else:
+            raise last_exc  # type: ignore[misc]
 
         # Find the first function call in the response.
         for cand in response.candidates or []:

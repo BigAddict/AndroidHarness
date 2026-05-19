@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from androidharness import __version__
 from androidharness.agent import Agent, GeminiClient
 
 
@@ -68,6 +69,7 @@ def run_task(
     (run_dir / "meta.json").write_text(
         json.dumps(
             {
+                "harness_version": __version__,
                 "task": task,
                 "model": model,
                 "device": {"serial": device.serial, "model": device.model},
@@ -75,6 +77,7 @@ def run_task(
                 "ended_at": time.time(),
                 "max_turns": max_turns,
                 "wall_clock_s": wall_clock_s,
+                "status": result.status,
             },
             indent=2,
         )
