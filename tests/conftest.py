@@ -49,3 +49,35 @@ class FakeDevice:
 @pytest.fixture
 def fake_device() -> FakeDevice:
     return FakeDevice()
+
+
+@dataclass
+class _Scripted:
+    tool_calls: list  # list[ToolCall-like dicts: {"name": str, "args": dict}]
+    index: int = 0
+
+
+class FakeGeminiClient:
+    """Scripted Gemini stand-in. Returns the next pre-canned tool call per generate()."""
+
+    def __init__(self, tool_calls: list[dict]):
+        self._script = _Scripted(tool_calls=tool_calls)
+        self.generate_calls: list[dict] = []
+
+    def generate(self, *, model, system_instruction, contents, tools):
+        self.generate_calls.append(
+            {"model": model, "system_instruction": system_instruction,
+             "contents": contents, "tools": tools}
+        )
+        idx = self._script.index
+        if idx >= len(self._script.tool_calls):
+            raise AssertionError("FakeGeminiClient ran out of scripted tool calls")
+        self._script.index += 1
+        return self._script.tool_calls[idx]
+
+
+@pytest.fixture
+def fake_gemini():
+    def _make(tool_calls):
+        return FakeGeminiClient(tool_calls=tool_calls)
+    return _make
