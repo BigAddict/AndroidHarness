@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -11,6 +12,8 @@ from androidharness.tools import (
     ToolResult,
     execute,
 )
+
+_log = logging.getLogger("androidharness.agent")
 
 SYSTEM_PROMPT = """You are controlling a real Android device to complete a user task.
 Each turn you receive:
@@ -57,9 +60,11 @@ class Agent:
         turn_log: list[dict] = []
         needs_screenshot = False
         started = time.monotonic()
+        _log.info("run start: task=%r model=%s max_turns=%d", task, self.model, self.max_turns)
 
         for turn_idx in range(1, self.max_turns + 1):
             if time.monotonic() - started > self.wall_clock_s:
+                _log.warning("wall-clock timeout after %d turns", turn_idx - 1)
                 return RunResult(
                     status="timeout",
                     success=None,
@@ -74,7 +79,10 @@ class Agent:
             if needs_screenshot:
                 obs_payload["screenshot"] = self.device.screenshot()
                 needs_screenshot = False
+                _log.info("turn %d: screenshot attached (%d bytes)",
+                          turn_idx, len(obs_payload["screenshot"]))
             contents.append(obs_payload)
+            _log.info("turn %d: observation has %d nodes", turn_idx, len(obs.nodes))
 
             raw = self.client.generate(
                 model=self.model,
@@ -83,8 +91,11 @@ class Agent:
                 tools=GEMINI_FUNCTION_DECLARATIONS,
             )
             call = ToolCall(name=raw["name"], args=dict(raw.get("args", {})))
+            _log.info("turn %d: model called %s(%s)", turn_idx, call.name, call.args)
 
             result = execute(self.device, call, obs)
+            _log.info("turn %d: result ok=%s msg=%s",
+                      turn_idx, isinstance(result, ToolResult), result.message)
 
             tool_result_payload = {
                 "role": "tool_result",
@@ -106,6 +117,8 @@ class Agent:
 
             if isinstance(result, ToolResult):
                 if result.is_done:
+                    _log.info("run done: success=%s reason=%r turns=%d",
+                              result.done_success, result.done_reason, turn_idx)
                     return RunResult(
                         status="done",
                         success=result.done_success,
@@ -116,6 +129,7 @@ class Agent:
                 if result.requests_screenshot:
                     needs_screenshot = True
 
+        _log.warning("max turns (%d) reached without done()", self.max_turns)
         return RunResult(
             status="max_turns",
             success=None,

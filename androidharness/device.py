@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
 import uiautomator2 as u2
+
+_log = logging.getLogger("androidharness.device")
 
 
 class Device(Protocol):
@@ -98,6 +101,7 @@ class UIAutomatorDevice:
             self._d.clear_text()
         self._d.send_keys(text)
         if prior_ime and prior_ime != "com.github.uiautomator/.FastInputIME":
+            _log.info("restoring IME to %s after type_text", prior_ime)
             self._set_ime(prior_ime)
 
     def _current_ime(self) -> str | None:

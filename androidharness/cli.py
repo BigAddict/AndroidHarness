@@ -8,6 +8,7 @@ import typer
 
 from androidharness.agent import GoogleGenaiClient
 from androidharness.device import UIAutomatorDevice, list_devices
+from androidharness.logging_setup import setup_file_logging
 from androidharness.runner import run_task
 
 app = typer.Typer(add_completion=False, help="AI harness for Android devices.")
@@ -33,7 +34,11 @@ def run_cmd(
     max_turns: int = typer.Option(40, "--max-turns"),
     wall_clock: float = typer.Option(600.0, "--wall-clock"),
     runs_dir: Path = typer.Option("./runs", "--run-dir"),
+    logs_dir: Path = typer.Option("./logs", "--logs-dir"),
 ) -> None:
+    log_path = setup_file_logging(logs_dir)
+    typer.echo(f"logs: {log_path}", err=True)
+
     if serial and device_index is not None:
         typer.echo("error: --serial and --device-index are mutually exclusive", err=True)
         raise typer.Exit(code=2)

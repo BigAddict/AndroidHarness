@@ -170,7 +170,15 @@ GEMINI_FUNCTION_DECLARATIONS: list[dict[str, Any]] = [
     },
     {
         "name": "swipe",
-        "description": "Swipe the screen. Direction is finger direction.",
+        "description": (
+            "Whole-screen gesture. Direction names the way the finger TRAVELS. "
+            "To reveal content lower on the page (scroll DOWN through a list), "
+            "use direction='up' — the finger drags upward and content follows. "
+            "To dismiss the app drawer or go back to a previous home page, use "
+            "direction='down'. To page the home screen sideways, use 'left' or "
+            "'right'. Use the 'scroll' tool instead when you want to scroll "
+            "inside ONE specific scrollable element rather than the whole screen."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -182,7 +190,12 @@ GEMINI_FUNCTION_DECLARATIONS: list[dict[str, Any]] = [
     },
     {
         "name": "scroll",
-        "description": "Scroll a specific scrollable node by id.",
+        "description": (
+            "Scroll inside a specific scrollable node (a list, RecyclerView, "
+            "WebView, etc.) by id. Direction names the way the finger TRAVELS — "
+            "use 'up' to bring later items in the list into view, 'down' to go "
+            "back toward the top of the list."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
