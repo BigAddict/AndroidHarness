@@ -99,12 +99,26 @@ def run_cmd(
     task: str = typer.Argument(..., help="Natural-language task to drive on the device."),
     serial: str | None = typer.Option(None, "--serial", "-s"),
     device_index: int | None = typer.Option(None, "--device-index", "-i"),
-    model: str = typer.Option("gemini-2.5-flash", "--model"),
-    max_turns: int = typer.Option(40, "--max-turns"),
-    wall_clock: float = typer.Option(600.0, "--wall-clock"),
-    runs_dir: Path = typer.Option("./runs", "--run-dir"),
-    logs_dir: Path = typer.Option("./logs", "--logs-dir"),
+    model: str | None = typer.Option(None, "--model"),
+    max_turns: int | None = typer.Option(None, "--max-turns"),
+    wall_clock: float | None = typer.Option(None, "--wall-clock"),
+    runs_dir: Path | None = typer.Option(None, "--run-dir"),
+    logs_dir: Path | None = typer.Option(None, "--logs-dir"),
+    config_path: Path | None = typer.Option(None, "--config", help="Override the config path."),
 ) -> None:
+    try:
+        cfg = load_config(config_path)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=1) from e
+
+    d = cfg.defaults
+    model = model if model is not None else d.model
+    max_turns = max_turns if max_turns is not None else d.max_turns
+    wall_clock = wall_clock if wall_clock is not None else d.wall_clock_s
+    runs_dir = runs_dir if runs_dir is not None else Path(d.runs_dir)
+    logs_dir = logs_dir if logs_dir is not None else Path(d.logs_dir)
+
     log_path = setup_file_logging(logs_dir)
     typer.echo(f"logs: {log_path}", err=True)
 
@@ -127,6 +141,14 @@ def run_cmd(
             typer.echo(f"--device-index out of range: {device_index}", err=True)
             raise typer.Exit(code=1)
         chosen = infos[device_index].serial
+    elif d.device_serial is not None:
+        if d.device_serial not in {i.serial for i in infos}:
+            typer.echo(
+                f"config defaults.device_serial {d.device_serial!r} not in connected devices",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        chosen = d.device_serial
     else:
         if len(infos) == 1:
             chosen = infos[0].serial
