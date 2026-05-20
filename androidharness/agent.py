@@ -40,6 +40,11 @@ Rules:
   * Prefer answering the user's question without installing new apps. Only install an
     app when there is no on-device path (existing app, settings screen, system info)
     that would produce the answer.
+  * If a tool returns ok=False, try a different approach to the same goal before
+    navigating elsewhere. Examples: if type() fails on a lock-screen or secure
+    input, tap the digit/character buttons one at a time and then tap OK; if
+    tap() fails because an id is stale, look for a node with the same label or
+    resource-id in the current observation and use that id instead.
   * If a previous tool returned a NO_PROGRESS warning, do NOT repeat the same call.
     Switch tactics: call show_screen() if the tree is unclear, pick a different element,
     swap scroll for swipe (or vice versa), or press_key('back') to escape.
