@@ -30,6 +30,10 @@ def _new_run_dir(root: Path) -> Path:
     return p
 
 
+def _write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2))
+
+
 def run_task(
     *,
     task: str,
@@ -43,6 +47,39 @@ def run_task(
     run_dir = _new_run_dir(runs_root)
     start = time.time()
 
+    # Persist meta.json BEFORE the run starts so the run is discoverable even
+    # if the loop crashes with no exception handler firing.
+    meta: dict[str, Any] = {
+        "harness_version": __version__,
+        "task": task,
+        "model": model,
+        "device": {"serial": device.serial, "model": device.model},
+        "started_at": start,
+        "max_turns": max_turns,
+        "wall_clock_s": wall_clock_s,
+        "status": "running",
+    }
+    _write_json(run_dir / "meta.json", meta)
+
+    turns_path = run_dir / "turns.jsonl"
+    turns_file = turns_path.open("w")
+
+    def write_turn(turn: dict) -> None:
+        # Copy so popping the screenshot doesn't mutate the agent's in-memory log.
+        turn = dict(turn)
+        obs_payload = turn.get("observation_payload")
+        screenshot_bytes = None
+        if isinstance(obs_payload, dict):
+            obs_payload = dict(obs_payload)
+            screenshot_bytes = obs_payload.pop("screenshot", None)
+            turn["observation_payload"] = obs_payload
+        if screenshot_bytes:
+            ss_path = run_dir / "screenshots" / f"turn-{turn['turn']:03d}.png"
+            ss_path.write_bytes(screenshot_bytes)
+            turn["screenshot_path"] = str(ss_path.relative_to(run_dir))
+        turns_file.write(json.dumps(turn, default=str) + "\n")
+        turns_file.flush()
+
     agent = Agent(
         device=device,
         client=client,
@@ -51,48 +88,39 @@ def run_task(
         wall_clock_s=wall_clock_s,
     )
 
-    result = agent.run(task)
-
-    # Persist turn-by-turn log; pull screenshots out of observation payloads if present.
-    with (run_dir / "turns.jsonl").open("w") as f:
-        for turn in result.turn_log:
-            screenshot_bytes = None
-            obs_payload = turn.get("observation_payload")
-            if isinstance(obs_payload, dict):
-                screenshot_bytes = obs_payload.pop("screenshot", None)
-            if screenshot_bytes:
-                ss_path = run_dir / "screenshots" / f"turn-{turn['turn']:03d}.png"
-                ss_path.write_bytes(screenshot_bytes)
-                turn["screenshot_path"] = str(ss_path.relative_to(run_dir))
-            f.write(json.dumps(turn, default=str) + "\n")
-
-    (run_dir / "meta.json").write_text(
-        json.dumps(
+    try:
+        result = agent.run(task, on_turn=write_turn)
+    except BaseException as e:
+        turns_file.close()
+        meta["ended_at"] = time.time()
+        meta["status"] = "crashed"
+        _write_json(run_dir / "meta.json", meta)
+        _write_json(
+            run_dir / "result.json",
             {
-                "harness_version": __version__,
-                "task": task,
-                "model": model,
-                "device": {"serial": device.serial, "model": device.model},
-                "started_at": start,
-                "ended_at": time.time(),
-                "max_turns": max_turns,
-                "wall_clock_s": wall_clock_s,
-                "status": result.status,
+                "status": "crashed",
+                "success": False,
+                "reason": f"{type(e).__name__}: {e}",
+                "turns": sum(1 for _ in turns_path.open()),
             },
-            indent=2,
         )
-    )
+        raise
+    finally:
+        if not turns_file.closed:
+            turns_file.close()
 
-    (run_dir / "result.json").write_text(
-        json.dumps(
-            {
-                "status": result.status,
-                "success": result.success,
-                "reason": result.reason,
-                "turns": result.turns,
-            },
-            indent=2,
-        )
+    meta["ended_at"] = time.time()
+    meta["status"] = result.status
+    _write_json(run_dir / "meta.json", meta)
+
+    _write_json(
+        run_dir / "result.json",
+        {
+            "status": result.status,
+            "success": result.success,
+            "reason": result.reason,
+            "turns": result.turns,
+        },
     )
 
     return RunOutcome(

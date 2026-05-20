@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -9,6 +10,7 @@ from androidharness.perception import parse_hierarchy
 from androidharness.tools import (
     GEMINI_FUNCTION_DECLARATIONS,
     ToolCall,
+    ToolError,
     ToolResult,
     execute,
 )
@@ -91,7 +93,12 @@ class Agent:
     max_turns: int = 40
     wall_clock_s: float = 600.0
 
-    def run(self, task: str) -> RunResult:
+    def run(
+        self,
+        task: str,
+        *,
+        on_turn: Callable[[dict], None] | None = None,
+    ) -> RunResult:
         contents: list[dict] = [{"role": "user", "task": task}]
         turn_log: list[dict] = []
         needs_screenshot = False
@@ -144,7 +151,14 @@ class Agent:
             call = ToolCall(name=raw["name"], args=dict(raw.get("args", {})))
             _log.info("turn %d: model called %s(%s)", turn_idx, call.name, call.args)
 
-            result = execute(self.device, call, obs)
+            try:
+                result = execute(self.device, call, obs)
+            except Exception as e:
+                # Device drivers can raise transport errors, assertion errors,
+                # etc. mid-call. Surface as ToolError so the agent gets a chance
+                # to react instead of crashing the whole run.
+                _log.exception("turn %d: tool dispatch raised", turn_idx)
+                result = ToolError(f"tool {call.name} raised {type(e).__name__}: {e}")
             _log.info("turn %d: result ok=%s msg=%s",
                       turn_idx, isinstance(result, ToolResult), result.message)
 
@@ -165,6 +179,8 @@ class Agent:
                     "tool_result": tool_result_payload,
                 }
             )
+            if on_turn is not None:
+                on_turn(turn_log[-1])
 
             if isinstance(result, ToolResult):
                 if result.is_done:

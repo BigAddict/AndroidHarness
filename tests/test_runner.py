@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from androidharness.runner import run_task
 
 HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
@@ -68,3 +70,44 @@ def test_run_task_writes_screenshot_only_when_requested(tmp_path, fake_device, f
     screenshots = list((run_dir / "screenshots").glob("*.png"))
     assert len(screenshots) == 1
     assert screenshots[0].read_bytes() == b"PNGDATA"
+
+
+def test_run_task_persists_turns_incrementally_on_crash(tmp_path, fake_device):
+    """If the LLM client raises mid-run, turns completed before the crash must
+    survive to disk. meta.json must exist. A crash result.json must be written."""
+    fake_device.hierarchy_xml = HIERARCHY
+
+    class CrashingClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, **kwargs):
+            self.calls += 1
+            if self.calls >= 2:
+                raise RuntimeError("simulated LLM outage")
+            return {"name": "tap", "args": {"id": 1}}
+
+    with pytest.raises(RuntimeError, match="simulated LLM outage"):
+        run_task(
+            task="crash on turn 2",
+            device=fake_device,
+            client=CrashingClient(),
+            model="gemini-2.5-flash",
+            runs_root=tmp_path,
+        )
+
+    run_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
+    assert len(run_dirs) == 1
+    rd = run_dirs[0]
+
+    meta = json.loads((rd / "meta.json").read_text())
+    assert meta["task"] == "crash on turn 2"
+
+    lines = (rd / "turns.jsonl").read_text().splitlines()
+    assert len(lines) == 1
+    turn0 = json.loads(lines[0])
+    assert turn0["tool_call"]["name"] == "tap"
+
+    crash_result = json.loads((rd / "result.json").read_text())
+    assert crash_result["status"] == "crashed"
+    assert "simulated LLM outage" in crash_result["reason"]

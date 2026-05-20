@@ -89,6 +89,54 @@ def test_agent_records_each_turn(fake_device, fake_gemini):
     assert "tool_result" in result.turn_log[0]
 
 
+def test_agent_device_exception_becomes_tool_error_and_run_continues(
+    fake_device, fake_gemini
+):
+    """A device-driver exception during a tool call must NOT crash the run. It
+    must surface back to the model as a tool_result with ok=False so the agent
+    can react. The run keeps looping."""
+    fake_device.hierarchy_xml = HIERARCHY
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated device crash")
+
+    fake_device.tap = boom
+
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": False, "reason": "after boom"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    result = agent.run("trigger crash")
+
+    assert result.status == "done"
+    assert len(result.turn_log) == 2
+    tr = result.turn_log[0]["tool_result"]
+    assert tr["ok"] is False
+    assert "RuntimeError" in tr["message"] or "simulated device crash" in tr["message"]
+
+
+def test_agent_invokes_on_turn_callback_per_turn(fake_device, fake_gemini):
+    """Caller can pass on_turn=... to receive each turn as soon as it completes,
+    enabling incremental persistence."""
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    seen: list[dict] = []
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    agent.run("ok", on_turn=lambda t: seen.append(dict(t)))
+
+    assert [t["turn"] for t in seen] == [1, 2]
+    assert seen[0]["tool_call"]["name"] == "tap"
+    assert seen[1]["tool_call"]["name"] == "done"
+
+
 def test_no_progress_warning_injected_after_3_identical_stalled_turns(
     fake_device, fake_gemini
 ):
