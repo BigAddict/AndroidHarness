@@ -163,7 +163,47 @@ Not required for v2 launch, but spec it so the boundary is clean:
 - `adb-proxy` is a thin FastAPI service wrapping a local `UIAutomatorDevice` and exposing the same Protocol over HTTP.
 - Build this only when the user actually wants to run the agent on a different machine than the phone. Until then, the Protocol is enough.
 
-## 11. Long-term roadmap
+## 11. Flows — procedural memory (compiled extensions)
+
+Distinct from the vector store (which is *advisory*): flows are *executable* tools compiled from past behavior. When the agent has performed the same subsequence many times, it gets turned into a named, parametrized tool the agent can call as a single step.
+
+**Shape.** Each flow is a YAML file at `~/.androidharness/flows/<name>.yaml` (mirrored in SQLite for queryability):
+
+```yaml
+name: open_app
+description: Open an app by name from the home screen / drawer.
+params:
+  name: { type: string, description: "App display name" }
+steps:
+  - tool: press_key
+    args: { name: home }
+  - tool: swipe
+    args: { direction: up, distance: long }
+  - tool: tap_by_text
+    args: { text: "{{ name }}" }
+```
+
+**Three new pieces of machinery:**
+
+- **Selectors, not ids.** Flow steps reference UI elements via `(resource-id, text, class)` selectors captured at recording time, not the turn-local integer ids. Two synthetic helper tools — `tap_by_text(text)` and `tap_by_resource_id(rid)` — re-resolve the selector against the live hierarchy each step. (`tap_by_resource_id` lands when perception step 3 adds `resource-id` to the render.)
+- **`FlowStore`.** Loads active flows from disk on agent startup. `GEMINI_FUNCTION_DECLARATIONS` becomes `base_tools + active_flows`. `execute(device, call, obs)` dispatches: if `call.name` matches a flow, calls `execute_flow(flow, args, device, obs)` which iterates steps, substituting `{{ params }}`, re-dumping hierarchy between steps so observations stay fresh.
+- **Flow miner.** Background job that walks `runs/*/turns.jsonl`, finds repeated subsequences (length 2–8) clustered by normalized signature (tool name + dehydrated args), surfaces candidates when frequency ≥ N (default 3). Args that vary across witnessed instances become parameters; constant args stay literal.
+
+**Promotion gate.** Mined sequences are **candidates**, not active flows. User reviews them in the Settings UI **Flows panel**, edits names / descriptions / param schemas, and promotes to active. This is the trust gate — auto-promotion is too risky because apps update and captured selectors go stale.
+
+**Failure handling.** If any step's selector matches no node, the flow aborts and returns a structured `tool_result` to the agent: `flow open_app failed at step 3: no node matched {text: "Spotify"}`. Agent loop resumes with control returned — flow becomes advisory in that moment, not a hard dependency.
+
+**Discovery / context cost.** Two layers:
+- A small set of always-on **core flows** (~5–10) lives in the tool list every run.
+- **Task-specific flows** are retrieved by vector-searching the flow registry against the run's task description on startup, top-K injected. Reuses the chromadb infrastructure from milestone #12.
+
+**Composition.** Flows can call flows. `navigate_to(destination)` can call `open_app("Maps")` then `search_in_maps(destination)`. Detected by the executor checking `call.name` against the flow registry recursively.
+
+**Risk to manage.** A wrong flow is worse than no flow — it confidently does the wrong thing. Mitigations: (1) selectors must include `resource-id` when present (more stable than text); (2) every flow execution is logged with `(success, step_count, failed_step?)` to a `flow_runs` table; (3) flows with failure rate >30% over the last 10 invocations get auto-disabled and re-surfaced as candidates needing review.
+
+**Why this is in the spec but late in the roadmap.** Flows need: storage seam (#7), perception step 3 (#11, for resource-id selectors), episodic memory (#12, for retrieval). So it slots after those land. Doing it earlier means building the selector helpers and the flow runtime before the infrastructure they depend on exists.
+
+## 12. Long-term roadmap
 
 Ordered by dependency, not by hype:
 
@@ -186,13 +226,16 @@ Ordered by dependency, not by hype:
 | 15 | Vector store layers (b) + (c) | UI knowledge + recovery |
 | 16 | Perception compression steps 4–5 (compact format, inspect) | depends on (11) benchmarks |
 | 17 | Web UI v2.4 — cost dashboard | full self-service |
-| 18 | Device seam — `RemoteDevice` + `adb-proxy` | agent off-host (only if needed) |
+| 18 | **Flow runtime** — `FlowStore`, selector helpers (`tap_by_text`, `tap_by_resource_id`), `execute_flow`, core flows shipped | procedural memory; depends on (7), (11), (12) |
+| 19 | **Flow miner** — repeated-subsequence detection over `runs/`, candidate generation, idempotent reindex | auto-discovery of flow candidates |
+| 20 | **Settings UI Flows panel** — review candidates, edit, promote, view execution stats; auto-disable on >30% failure rate | trust gate + flow lifecycle |
+| 21 | Device seam — `RemoteDevice` + `adb-proxy` | agent off-host (only if needed) |
 
 Each milestone is small enough to land in one focused session. **Items 1–5 are the "v2 minimum"** — after those, the harness is multi-provider, gated, and configurable through a browser. Items 6+ are the long tail.
 
 **Sequencing note:** Config schema (1) is the new prerequisite — provider, throttler, and policy all read from it, and the Settings UI is its editor. Building (1) first means (2)–(5) just plug into a stable shape instead of churning their interfaces as we go.
 
-## 12. What this design does NOT do
+## 13. What this design does NOT do
 
 - Replace the agent loop. We keep `agent.py` as-is and let it grow only when the loop itself becomes the bottleneck (e.g. multi-agent planner/executor split).
 - Add benchmarks or eval mode. Replay (milestone 8) is the first step toward that, but the eval harness itself is a separate v3 spec.
@@ -200,8 +243,10 @@ Each milestone is small enough to land in one focused session. **Items 1–5 are
 - Containerization. Everything runs in the user's `uv`-managed venv.
 - TOON or alternative formats — only adopted if step 7 benchmark proves the win.
 
-## 13. Open questions to revisit during implementation
+## 14. Open questions to revisit during implementation
 
 - **Embedding cost vs. local model.** Gemini `text-embedding-004` is free now but quota'd. Decide in milestone 10 whether to default to local `sentence-transformers/all-MiniLM-L6-v2`.
 - **Policy default for `swipe`.** Currently `auto`. A swipe on a banking app's confirm screen is destructive. Revisit after we see real failure modes.
 - **SQLite concurrency.** Single-writer is fine for personal use; if Web UI ever spawns concurrent runs, switch to WAL mode (one-line change).
+- **Flow auto-disable threshold.** 30% failure over 10 invocations is a guess. Tune once we have real flow telemetry from milestone #20.
+- **Flow miner minimum frequency.** Default N=3 witnessed instances before a candidate surfaces. Too low = noise, too high = miss good flows. Tune from real `runs/` data.
