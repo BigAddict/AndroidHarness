@@ -117,6 +117,7 @@ class Agent:
     wall_clock_s: float = 600.0
     quantize_screenshots: bool = False
     viewport_filter: bool = False
+    resource_id_in_render: bool = False
 
     def run(
         self,
@@ -156,7 +157,10 @@ class Agent:
                 screenshot_bytes = None
 
             obs = parse_hierarchy(xml, viewport_filter=self.viewport_filter)
-            obs_payload: dict[str, Any] = {"role": "observation", "text": obs.render()}
+            obs_payload: dict[str, Any] = {
+                "role": "observation",
+                "text": obs.render(with_resource_ids=self.resource_id_in_render),
+            }
             if screenshot_bytes is not None:
                 obs_payload["screenshot"] = screenshot_bytes
                 needs_screenshot = False

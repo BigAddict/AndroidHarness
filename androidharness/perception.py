@@ -30,8 +30,7 @@ class Node:
         x1, y1, x2, y2 = self.bounds
         return ((x1 + x2) // 2, (y1 + y2) // 2)
 
-    @property
-    def summary(self) -> str:
+    def format(self, *, with_resource_id: bool = False) -> str:
         traits: list[str] = []
         # Editable (EditText) subsumes clickable — don't double-list it
         if self.clickable and not self.editable:
@@ -55,7 +54,17 @@ class Node:
         parts = [f"[{self.id}]", self.short_class]
         if label:
             parts.append(label)
+
+        if with_resource_id and self.resource_id:
+            rid = self.resource_id
+            short = rid.rsplit("/", 1)[-1] if "/" in rid else rid
+            parts.append(f"#{short}")
+
         return (" ".join(parts) + traits_str).rstrip()
+
+    @property
+    def summary(self) -> str:
+        return self.format()
 
 
 @dataclass
@@ -68,8 +77,8 @@ class Observation:
                 return n
         raise KeyError(node_id)
 
-    def render(self) -> str:
-        return "\n".join(n.summary for n in self.nodes)
+    def render(self, *, with_resource_ids: bool = False) -> str:
+        return "\n".join(n.format(with_resource_id=with_resource_ids) for n in self.nodes)
 
 
 def _parse_bounds(raw: str) -> tuple[int, int, int, int]:

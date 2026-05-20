@@ -160,3 +160,73 @@ def test_viewport_filter_dense_ids_after_drops():
     obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
     ids = [n.id for n in obs.nodes]
     assert ids == list(range(1, len(ids) + 1))
+
+
+# -- Resource-id in render (spec §7 step 3) -----------------------------------
+
+_WITH_RESOURCE_IDS_XML = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout">
+    <node bounds="[40,200][520,320]" class="android.widget.Button" text="Settings"
+          resource-id="com.android.settings:id/settings_row" clickable="true"/>
+    <node bounds="[40,360][520,480]" class="android.widget.EditText"
+          resource-id="com.android.settings:id/search_box" content-desc="Search" clickable="true"/>
+    <node bounds="[40,520][520,640]" class="android.widget.Button" text="No-Resource"
+          clickable="true"/>
+  </node>
+</hierarchy>
+"""
+
+
+def test_node_summary_property_unchanged_omits_resource_id():
+    """`Node.summary` is the legacy property — must NOT include resource-id so
+    existing callers keep working."""
+    obs = parse_hierarchy(_WITH_RESOURCE_IDS_XML)
+    n = obs.nodes[0]
+    assert "#settings_row" not in n.summary
+    assert n.summary == '[1] Button "Settings" (clickable)'
+
+
+def test_node_format_with_resource_id_inserts_short_id_before_traits():
+    obs = parse_hierarchy(_WITH_RESOURCE_IDS_XML)
+    n = obs.nodes[0]
+    assert n.format(with_resource_id=True) == '[1] Button "Settings" #settings_row (clickable)'
+
+
+def test_node_format_without_resource_id_attribute_omits_marker():
+    obs = parse_hierarchy(_WITH_RESOURCE_IDS_XML)
+    no_rid = obs.nodes[2]
+    assert no_rid.resource_id == ""
+    assert "#" not in no_rid.format(with_resource_id=True)
+
+
+def test_observation_render_with_resource_ids_uses_short_form_per_node():
+    obs = parse_hierarchy(_WITH_RESOURCE_IDS_XML)
+    rendered = obs.render(with_resource_ids=True)
+    lines = rendered.splitlines()
+    assert lines[0] == '[1] Button "Settings" #settings_row (clickable)'
+    # Second node: EditText with content-desc but no own text.
+    assert "#search_box" in lines[1]
+    # Third node has no resource-id — line unchanged
+    assert "#" not in lines[2]
+
+
+def test_observation_render_default_omits_resource_ids():
+    obs = parse_hierarchy(_WITH_RESOURCE_IDS_XML)
+    rendered = obs.render()
+    assert "#settings_row" not in rendered
+    assert "#search_box" not in rendered
+
+
+def test_short_resource_id_handles_missing_slash():
+    """If `resource-id` has no slash (rare but possible), use it verbatim."""
+    xml = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout">
+    <node bounds="[40,200][520,320]" class="android.widget.Button" text="X"
+          resource-id="plain_id" clickable="true"/>
+  </node>
+</hierarchy>
+"""
+    obs = parse_hierarchy(xml)
+    assert obs.nodes[0].format(with_resource_id=True) == '[1] Button "X" #plain_id (clickable)'

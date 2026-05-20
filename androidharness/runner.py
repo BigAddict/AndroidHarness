@@ -45,6 +45,7 @@ def run_task(
     wall_clock_s: float = 600.0,
     quantize_screenshots: bool = False,
     viewport_filter: bool = False,
+    resource_id_in_render: bool = False,
 ) -> RunOutcome:
     run_dir = _new_run_dir(runs_root)
     start = time.time()
@@ -90,6 +91,7 @@ def run_task(
         wall_clock_s=wall_clock_s,
         quantize_screenshots=quantize_screenshots,
         viewport_filter=viewport_filter,
+        resource_id_in_render=resource_id_in_render,
     )
 
     try:

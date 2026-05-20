@@ -176,6 +176,7 @@ def run_cmd(
         wall_clock_s=wall_clock,
         quantize_screenshots=cfg.perception.screenshot_quantized,
         viewport_filter=cfg.perception.viewport_filter,
+        resource_id_in_render=cfg.perception.resource_id_in_render,
     )
     typer.echo(f"run dir: {outcome.run_dir}")
     typer.echo(f"status:  {outcome.status}")
