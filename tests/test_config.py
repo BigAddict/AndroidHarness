@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from androidharness.config import (
+    CONFIG_HEADER,
     AndroidHarnessConfig,
+    ConfigError,
     DefaultsConfig,
     LoggingConfig,
     MemoryConfig,
@@ -12,6 +15,9 @@ from androidharness.config import (
     PolicyConfig,
     ProvidersConfig,
     ThrottlerConfig,
+    default_config_path,
+    load_config,
+    save_config,
 )
 
 
@@ -104,3 +110,82 @@ def test_wall_clock_must_be_positive():
 def test_version_must_be_one():
     with pytest.raises(ValidationError):
         AndroidHarnessConfig(version=2)
+
+
+def test_default_config_path_is_under_home_androidharness(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("ANDROIDHARNESS_CONFIG", raising=False)
+    assert default_config_path() == tmp_path / ".androidharness" / "config.yaml"
+
+
+def test_default_config_path_respects_env_override(monkeypatch, tmp_path):
+    custom = tmp_path / "custom.yaml"
+    monkeypatch.setenv("ANDROIDHARNESS_CONFIG", str(custom))
+    assert default_config_path() == custom
+
+
+def test_load_config_missing_file_returns_defaults(tmp_path):
+    cfg = load_config(tmp_path / "does_not_exist.yaml")
+    assert cfg == AndroidHarnessConfig()
+
+
+def test_load_config_empty_file_returns_defaults(tmp_path):
+    p = tmp_path / "empty.yaml"
+    p.write_text("")
+    cfg = load_config(p)
+    assert cfg == AndroidHarnessConfig()
+
+
+def test_load_config_partial_yaml_merges_with_defaults(tmp_path):
+    p = tmp_path / "partial.yaml"
+    p.write_text("defaults:\n  model: gemini-2.5-pro\n  max_turns: 80\n")
+    cfg = load_config(p)
+    assert cfg.defaults.model == "gemini-2.5-pro"
+    assert cfg.defaults.max_turns == 80
+    # Unspecified fields keep their defaults
+    assert cfg.defaults.wall_clock_s == 600.0
+    assert cfg.policy.default_mode == "auto"
+
+
+def test_load_config_malformed_yaml_raises_config_error(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_text("defaults: : : oops\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(p)
+    assert str(p) in str(exc.value)
+
+
+def test_load_config_validation_failure_raises_config_error(tmp_path):
+    p = tmp_path / "bad_schema.yaml"
+    p.write_text("defaults:\n  max_turns: -3\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(p)
+    assert "max_turns" in str(exc.value)
+
+
+def test_save_then_load_round_trip(tmp_path):
+    src = AndroidHarnessConfig(
+        defaults={"model": "gemini-2.5-pro", "max_turns": 25},
+        policy={"default_mode": "confirm"},
+    )
+    p = tmp_path / "config.yaml"
+    save_config(src, p)
+    loaded = load_config(p)
+    assert loaded == src
+
+
+def test_save_config_creates_parent_directories(tmp_path):
+    p = tmp_path / "nested" / "subdir" / "config.yaml"
+    save_config(AndroidHarnessConfig(), p)
+    assert p.exists()
+
+
+def test_save_config_writes_header_comment(tmp_path):
+    p = tmp_path / "with_header.yaml"
+    save_config(AndroidHarnessConfig(), p)
+    text = p.read_text()
+    assert text.startswith(CONFIG_HEADER)
+    body = text[len(CONFIG_HEADER):]
+    # Body must be valid YAML that round-trips through pydantic
+    parsed = yaml.safe_load(body)
+    assert parsed["version"] == 1
