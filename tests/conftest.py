@@ -45,6 +45,12 @@ class FakeDevice:
     def wait(self, seconds: float) -> None:
         self.calls.append(("wait", {"seconds": seconds}))
 
+    def open_notifications(self) -> None:
+        self.calls.append(("open_notifications", {}))
+
+    def close_notifications(self) -> None:
+        self.calls.append(("close_notifications", {}))
+
 
 @pytest.fixture
 def fake_device() -> FakeDevice:

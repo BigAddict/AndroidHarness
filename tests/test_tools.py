@@ -126,6 +126,18 @@ def test_unknown_tool_is_validation_error(fake_device, obs):
     assert isinstance(result, ToolError)
 
 
+def test_open_notifications_calls_device(fake_device, obs):
+    result = execute(fake_device, ToolCall(name="open_notifications", args={}), obs)
+    assert isinstance(result, ToolResult)
+    assert fake_device.calls == [("open_notifications", {})]
+
+
+def test_close_notifications_calls_device(fake_device, obs):
+    result = execute(fake_device, ToolCall(name="close_notifications", args={}), obs)
+    assert isinstance(result, ToolResult)
+    assert fake_device.calls == [("close_notifications", {})]
+
+
 def test_gemini_schema_has_all_tools():
     names = {decl["name"] for decl in GEMINI_FUNCTION_DECLARATIONS}
     assert names == {
@@ -138,4 +150,6 @@ def test_gemini_schema_has_all_tools():
         "wait",
         "show_screen",
         "done",
+        "open_notifications",
+        "close_notifications",
     }

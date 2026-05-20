@@ -61,6 +61,7 @@ class PerceptionConfig(BaseModel):
     sibling_collapse: bool = False
     viewport_filter: bool = False
     resource_id_in_render: bool = False
+    screenshot_quantized: bool = False
 
 
 class LoggingConfig(BaseModel):

@@ -174,6 +174,7 @@ def run_cmd(
         runs_root=runs_dir,
         max_turns=max_turns,
         wall_clock_s=wall_clock,
+        quantize_screenshots=cfg.perception.screenshot_quantized,
     )
     typer.echo(f"run dir: {outcome.run_dir}")
     typer.echo(f"status:  {outcome.status}")

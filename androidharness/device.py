@@ -24,6 +24,8 @@ class Device(Protocol):
     def scroll(self, x: int, y: int, direction: str) -> None: ...
     def press_key(self, name: str) -> None: ...
     def wait(self, seconds: float) -> None: ...
+    def open_notifications(self) -> None: ...
+    def close_notifications(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -165,3 +167,16 @@ class UIAutomatorDevice:
 
     def wait(self, seconds: float) -> None:
         time.sleep(min(seconds, 10.0))
+
+    def open_notifications(self) -> None:
+        # `cmd statusbar expand-notifications` works on Android 9+ without root.
+        subprocess.run(
+            ["adb", "-s", self.serial, "shell", "cmd", "statusbar", "expand-notifications"],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+
+    def close_notifications(self) -> None:
+        subprocess.run(
+            ["adb", "-s", self.serial, "shell", "cmd", "statusbar", "collapse"],
+            capture_output=True, text=True, check=True, timeout=5,
+        )

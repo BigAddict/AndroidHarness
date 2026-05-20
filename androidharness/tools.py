@@ -130,6 +130,14 @@ def execute(device, call: ToolCall, obs: Observation):
         device.wait(seconds)
         return ToolResult(message=f"waited {seconds}s")
 
+    if name == "open_notifications":
+        device.open_notifications()
+        return ToolResult(message="opened notification shade")
+
+    if name == "close_notifications":
+        device.close_notifications()
+        return ToolResult(message="closed notification shade")
+
     return ToolError(f"unknown tool: {name}")
 
 
@@ -241,5 +249,19 @@ GEMINI_FUNCTION_DECLARATIONS: list[dict[str, Any]] = [
             },
             "required": ["success", "reason"],
         },
+    },
+    {
+        "name": "open_notifications",
+        "description": (
+            "Pull down the system notification shade so its contents become part "
+            "of the next observation. Use this when the task asks about notifications, "
+            "an ongoing alert, or something visible only on the shade."
+        ),
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "close_notifications",
+        "description": "Collapse the notification shade back to the previous screen.",
+        "parameters": {"type": "OBJECT", "properties": {}},
     },
 ]

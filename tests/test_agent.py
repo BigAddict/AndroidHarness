@@ -137,6 +137,47 @@ def test_agent_invokes_on_turn_callback_per_turn(fake_device, fake_gemini):
     assert seen[1]["tool_call"]["name"] == "done"
 
 
+def test_agent_quantizes_screenshot_when_enabled(fake_device, fake_gemini):
+    """With quantize_screenshots=True, the screenshot in obs_payload should be
+    the quantized PNG, not the raw bytes from the device."""
+    import io
+
+    from PIL import Image
+
+    # Build a valid PNG so quantize_png can decode it.
+    img = Image.new("RGB", (16, 16), (10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_png = buf.getvalue()
+
+    fake_device.hierarchy_xml = HIERARCHY
+    fake_device.screenshot_bytes = raw_png
+
+    client = fake_gemini(
+        [
+            {"name": "show_screen", "args": {}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    agent = Agent(
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        max_turns=10,
+        quantize_screenshots=True,
+    )
+    result = agent.run("look")
+
+    # Turn 2's observation_payload (the one with the screenshot) should have
+    # the quantized image, not the raw bytes.
+    turn2_payload = result.turn_log[1]["observation_payload"]
+    assert "screenshot" in turn2_payload
+    assert turn2_payload["screenshot"] != raw_png
+    # Quantized PNG decodes to a P-mode image.
+    decoded = Image.open(io.BytesIO(turn2_payload["screenshot"]))
+    assert decoded.mode == "P"
+
+
 def test_no_progress_warning_injected_after_3_identical_stalled_turns(
     fake_device, fake_gemini
 ):

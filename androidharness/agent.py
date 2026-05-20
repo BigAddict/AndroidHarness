@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
+from androidharness.imaging import quantize_png
 from androidharness.perception import parse_hierarchy
 from androidharness.tools import (
     GEMINI_FUNCTION_DECLARATIONS,
@@ -92,6 +94,7 @@ class Agent:
     model: str = "gemini-2.5-flash"
     max_turns: int = 40
     wall_clock_s: float = 600.0
+    quantize_screenshots: bool = False
 
     def run(
         self,
@@ -116,11 +119,24 @@ class Agent:
                     turn_log=turn_log,
                 )
 
-            xml = self.device.dump_hierarchy()
+            # Dump hierarchy and screenshot (when requested) concurrently —
+            # each is a 1-2s ADB round-trip on a real device.
+            if needs_screenshot:
+                with ThreadPoolExecutor(max_workers=2) as ex:
+                    xml_future = ex.submit(self.device.dump_hierarchy)
+                    ss_future = ex.submit(self.device.screenshot)
+                    xml = xml_future.result()
+                    screenshot_bytes = ss_future.result()
+                if self.quantize_screenshots:
+                    screenshot_bytes = quantize_png(screenshot_bytes)
+            else:
+                xml = self.device.dump_hierarchy()
+                screenshot_bytes = None
+
             obs = parse_hierarchy(xml)
             obs_payload: dict[str, Any] = {"role": "observation", "text": obs.render()}
-            if needs_screenshot:
-                obs_payload["screenshot"] = self.device.screenshot()
+            if screenshot_bytes is not None:
+                obs_payload["screenshot"] = screenshot_bytes
                 needs_screenshot = False
                 _log.info("turn %d: screenshot attached (%d bytes)",
                           turn_idx, len(obs_payload["screenshot"]))

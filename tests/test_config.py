@@ -67,6 +67,7 @@ def test_perception_all_compression_steps_off_by_default():
     assert pc.sibling_collapse is False
     assert pc.viewport_filter is False
     assert pc.resource_id_in_render is False
+    assert pc.screenshot_quantized is False
 
 
 def test_logging_defaults():

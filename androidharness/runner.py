@@ -43,6 +43,7 @@ def run_task(
     runs_root: Path,
     max_turns: int = 40,
     wall_clock_s: float = 600.0,
+    quantize_screenshots: bool = False,
 ) -> RunOutcome:
     run_dir = _new_run_dir(runs_root)
     start = time.time()
@@ -86,6 +87,7 @@ def run_task(
         model=model,
         max_turns=max_turns,
         wall_clock_s=wall_clock_s,
+        quantize_screenshots=quantize_screenshots,
     )
 
     try:
