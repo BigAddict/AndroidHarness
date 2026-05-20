@@ -77,6 +77,8 @@ Screenshots stay as files on disk (binary blobs in SQLite are wasteful) — the 
 
 **Migrations:** alembic. Bootstraps on `androidharness migrate`.
 
+**Backfill of existing runs:** the `runs/` tree from v1 contains real run data we want queryable from day one. `androidharness index runs [--runs-dir ./runs]` scans every `<run_dir>/meta.json` + `turns.jsonl` + `result.json` and writes them into SQLite. Idempotent: skips runs whose `id` is already present, so it's safe to re-run. Same command also lives as a step inside `androidharness migrate` for first-time setup.
+
 ## 6. Telemetry — OpenTelemetry spans
 
 Wrap the agent loop and each tool dispatch in OTel spans. Default exporter writes to a local JSON file (no infra). Optional `LANGFUSE_API_KEY` env var swaps to a Langfuse exporter for LLM-aware tracing (cost, prompt diffs, latency percentiles). Stays optional — no Langfuse dependency in the default install.
@@ -100,6 +102,10 @@ User wants all three use cases: cross-run episodic, per-app UI knowledge, error-
 **Storage:** chromadb, embedded, file-backed at `~/.androidharness/memory.db`. Zero ops, sufficient for single-user. Switching to Qdrant later is a one-collection-export migration.
 
 **Indexing job:** runs after each task. Reads the just-finished run, embeds:
+
+For the existing `runs/` tree (and any future bulk re-index), `androidharness index memory [--runs-dir ./runs]` walks every completed run and embeds it. Idempotent on `(run_id, layer)` pairs so re-running is safe and cheap.
+
+Per-run flow embeds:
 - `(task_text)` → run summary doc (use case (a): episodic recall)
 - `(app_package, screen_signature)` → known-good action trajectories (use case (b): UI knowledge)
 - `(NO_PROGRESS warning + recovery action)` → escape recipes (use case (c): error library)
