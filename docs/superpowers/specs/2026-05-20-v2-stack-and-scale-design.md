@@ -117,25 +117,37 @@ Agent calls these explicitly — no automatic injection. Keeps the context windo
 
 ## 9. Web UI — FastAPI + HTMX
 
-Start as basic monitoring (per user direction), grow toward full control.
+Start as the **configuration surface** for the seams (LiteLLM, throttler, policy, memory, perception). CLI is retained — both read/write the same Pydantic-validated config file at `~/.androidharness/config.yaml`. Monitoring grows on top later.
 
-**v2.0 — Basic monitoring:**
-- Single page lists active and recent runs (from `SQLiteSink`).
-- Click a run → live view: current observation rendered as a list, last screenshot, tool call timeline, elapsed time, token + cost counters. Server-sent events stream turn events.
+**v2.0 — Settings UI:**
+- **Providers panel** — list of LLM providers; API key entry; enable/disable; drag-and-drop fallback order.
+- **Models panel** — logical model names (`fast`, `smart`, `cheap`) mapped to provider/model pairs; per-1M-token cost displayed from LiteLLM's price table.
+- **Throttler panel** — per-(provider, model) RPM / TPM / daily $ cap inputs.
+- **Policy panel** — per-tool mode dropdown (`auto` / `confirm` / `dry-run` / `deny`); session-only override toggle.
+- **Memory panel** — embedding model selector (Gemini `text-embedding-004` / local `all-MiniLM-L6-v2`); enable toggle per layer (episodic / app-knowledge / recovery); retention days.
+- **Perception panel** — per-compression-step toggle (sibling collapse, viewport filter, resource-id in render, etc.) so steps can be A/B'd against token spend.
+- **Devices panel** — live `adb devices` output with friendly labels; pick a default.
+- **Logs panel** — level, rotation size, file path.
+- All forms POST to a `PATCH /config` endpoint that validates against the Pydantic schema before writing. Invalid configs reject with the field error inline.
 - Auth: none. Bind to `127.0.0.1` only.
 
-**v2.1 — Replay:**
-- Open any past run, scrub turns like a debugger. Same view as live but with playback controls. This is the foundation for any later eval/regression workflow.
+**v2.1 — Live monitoring:**
+- Active and recent runs list. Click → live view: current observation, last screenshot, tool call timeline, elapsed, token + cost counters. SSE stream per run.
 
-**v2.2 — Launcher:**
-- Dropdown of `list_devices()` output + task input form. Submits to a `POST /runs` that spawns the agent in a background task. CLI still works in parallel.
+**v2.2 — Replay:**
+- Open any past run, scrub turns like a debugger. Foundation for later eval/regression work.
 
-**v2.3 — Policy / cost dashboard:**
-- Policy mode toggles, rolling spend per provider/model/day, throttler state.
+**v2.3 — Launcher:**
+- Dropdown of `list_devices()` + task input. Submits to `POST /runs` that spawns the agent as a background task. CLI works in parallel.
+
+**v2.4 — Cost dashboard:**
+- Rolling spend per provider/model/day, throttler state, per-run cost breakdown.
 
 **Stack:** FastAPI, Jinja2 templates, HTMX, SSE for streams, vanilla CSS. Screenshots rendered via `<img src="/runs/<id>/screenshots/<turn>.png">`. No React. No build step.
 
-**Packaging:** ships in the main package with an optional `[web]` extra (FastAPI + Jinja2 only pulled in if installed). New CLI command `androidharness serve --port 8000`.
+**Packaging:** ships in the main package with an optional `[web]` extra (FastAPI + Jinja2 + Pydantic only pulled in if installed). New CLI command `androidharness serve --port 8000`.
+
+**CLI / UI parity:** CLI flags (`--policy`, `--model`, `--throttle-rpm`, …) override the config file for that single run. The config file is the persisted source of truth; the UI is one of two equally valid ways to edit it.
 
 ## 10. Device seam — RemoteDevice (deferred trigger)
 
@@ -151,24 +163,28 @@ Ordered by dependency, not by hype:
 
 | # | Milestone | Unlocks |
 |---|-----------|---------|
-| 1 | Provider seam — LiteLLM + LLMClient refactor | multi-model |
-| 2 | Throttler — token-bucket + LiteLLM Router fallback | rate-limit survival |
-| 3 | Policy seam — gates on `type`, `long_press` | safe on personal device |
-| 4 | Storage seam — `SQLiteSink` + alembic migrations | queryable history |
-| 5 | Web UI v2.0 — basic monitoring | watch runs live |
+| 1 | **Config schema** — Pydantic `AndroidHarnessConfig` + YAML load/save + CLI integration | foundation for every seam below |
+| 2 | Provider seam — LiteLLM + `LLMClient` refactor, reads config | multi-model |
+| 3 | Throttler — token-bucket + LiteLLM Router fallback, reads config | rate-limit survival |
+| 4 | Policy seam — gates on `type`, `long_press`, reads config | safe on personal device |
+| 5 | **Web UI v2.0 — Settings UI** (the knob) | edit all of (1)–(4) without YAML |
 | 6 | Perception compression step 1 — sibling collapse | immediate token win |
-| 7 | OTel spans + JSON exporter | observability foundation |
-| 8 | Web UI v2.1 — replay | review past runs |
-| 9 | Perception compression steps 2–3 (viewport, resource-id) | further token wins |
-| 10 | Vector store layer (a) — `recall_similar_runs` | episodic memory |
-| 11 | Web UI v2.2 — launcher | run from browser |
-| 12 | Notification-shade tool pair (already specced in memory) | reach the shade |
-| 13 | Vector store layers (b) + (c) | UI knowledge + recovery |
-| 14 | Perception compression steps 4–5 (compact format, inspect) | depends on (10) benchmarks |
-| 15 | Web UI v2.3 — policy/cost dashboard | full self-service |
-| 16 | Device seam — `RemoteDevice` + `adb-proxy` | agent off-host (only if needed) |
+| 7 | Storage seam — `SQLiteSink` + alembic migrations | queryable history |
+| 8 | Web UI v2.1 — live monitoring (depends on 7) | watch runs live |
+| 9 | OTel spans + JSON exporter | observability foundation |
+| 10 | Web UI v2.2 — replay | review past runs |
+| 11 | Perception compression steps 2–3 (viewport, resource-id) | further token wins |
+| 12 | Vector store layer (a) — `recall_similar_runs` | episodic memory |
+| 13 | Web UI v2.3 — launcher | run from browser |
+| 14 | Notification-shade tool pair (already specced in memory) | reach the shade |
+| 15 | Vector store layers (b) + (c) | UI knowledge + recovery |
+| 16 | Perception compression steps 4–5 (compact format, inspect) | depends on (11) benchmarks |
+| 17 | Web UI v2.4 — cost dashboard | full self-service |
+| 18 | Device seam — `RemoteDevice` + `adb-proxy` | agent off-host (only if needed) |
 
-Each milestone is small enough to land in one focused session. Items 1–5 are the "v2 minimum" — after those, the harness is multi-provider, gated, queryable, and watchable. Items 6–15 are the long tail.
+Each milestone is small enough to land in one focused session. **Items 1–5 are the "v2 minimum"** — after those, the harness is multi-provider, gated, and configurable through a browser. Items 6+ are the long tail.
+
+**Sequencing note:** Config schema (1) is the new prerequisite — provider, throttler, and policy all read from it, and the Settings UI is its editor. Building (1) first means (2)–(5) just plug into a stable shape instead of churning their interfaces as we go.
 
 ## 12. What this design does NOT do
 
