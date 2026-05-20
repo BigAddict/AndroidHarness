@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import logging
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
 import uiautomator2 as u2
-
-_log = logging.getLogger("androidharness.device")
 
 
 class Device(Protocol):
@@ -94,37 +91,16 @@ class UIAutomatorDevice:
         self._d.long_click(x, y, duration=duration_ms / 1000)
 
     def type_text(self, x: int, y: int, text: str, replace: bool) -> None:
-        # uiautomator2 swaps the active IME to its own (FastInputIME) to type
-        # arbitrary text. Capture the user's IME first and restore it after so
-        # the phone is left the way we found it.
-        prior_ime = self._current_ime()
+        # Use the accessibility API (set_text) rather than send_keys, which
+        # requires uiautomator2 to swap the active IME to FastInputIME and
+        # commonly fails on lock screens / secure windows — the user's prior
+        # incident chain. set_text writes directly through the focused
+        # AccessibilityNode; no IME swap, no shell-out to adb.
         self._d.click(x, y)
+        focused = self._d(focused=True)
         if replace:
-            self._d.clear_text()
-        self._d.send_keys(text)
-        if prior_ime and prior_ime != "com.github.uiautomator/.FastInputIME":
-            _log.info("restoring IME to %s after type_text", prior_ime)
-            self._set_ime(prior_ime)
-
-    def _current_ime(self) -> str | None:
-        try:
-            out = subprocess.run(
-                ["adb", "-s", self.serial, "shell", "settings", "get",
-                 "secure", "default_input_method"],
-                capture_output=True, text=True, check=True, timeout=5,
-            ).stdout.strip()
-            return out or None
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return None
-
-    def _set_ime(self, ime_id: str) -> None:
-        try:
-            subprocess.run(
-                ["adb", "-s", self.serial, "shell", "ime", "set", ime_id],
-                capture_output=True, text=True, check=True, timeout=5,
-            )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            pass
+            focused.clear_text()
+        focused.set_text(text)
 
     def swipe(self, direction: str, distance: str) -> None:
         w, h = self._d.window_size()
