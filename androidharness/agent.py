@@ -49,6 +49,27 @@ Rules:
 _NO_PROGRESS_WINDOW = 3  # warn after this many identical calls with no UI change
 
 
+def _format_exception(e: BaseException) -> str:
+    """Render a tool-dispatch exception as a short, model-readable string.
+
+    `str(AssertionError())` is empty — gives the model nothing to act on. When
+    the message is missing, fall back to the originating frame so the model
+    sees `at .../uiautomator2/__init__.py:157 in _convert` instead of a bare
+    `AssertionError:`.
+    """
+    import traceback
+
+    name = type(e).__name__
+    msg = str(e).strip()
+    if msg:
+        return f"{name}: {msg}"
+    tb = traceback.extract_tb(e.__traceback__)
+    if tb:
+        last = tb[-1]
+        return f"{name} at {last.filename}:{last.lineno} in {last.name}"
+    return f"{name}()"
+
+
 def _signature(args: dict) -> tuple:
     """Hashable signature of a tool call's args. Args are primitives in v1."""
     return tuple(sorted(args.items(), key=lambda kv: kv[0]))
@@ -95,6 +116,7 @@ class Agent:
     max_turns: int = 40
     wall_clock_s: float = 600.0
     quantize_screenshots: bool = False
+    viewport_filter: bool = False
 
     def run(
         self,
@@ -133,7 +155,7 @@ class Agent:
                 xml = self.device.dump_hierarchy()
                 screenshot_bytes = None
 
-            obs = parse_hierarchy(xml)
+            obs = parse_hierarchy(xml, viewport_filter=self.viewport_filter)
             obs_payload: dict[str, Any] = {"role": "observation", "text": obs.render()}
             if screenshot_bytes is not None:
                 obs_payload["screenshot"] = screenshot_bytes
@@ -174,7 +196,7 @@ class Agent:
                 # etc. mid-call. Surface as ToolError so the agent gets a chance
                 # to react instead of crashing the whole run.
                 _log.exception("turn %d: tool dispatch raised", turn_idx)
-                result = ToolError(f"tool {call.name} raised {type(e).__name__}: {e}")
+                result = ToolError(f"tool {call.name} raised {_format_exception(e)}")
             _log.info("turn %d: result ok=%s msg=%s",
                       turn_idx, isinstance(result, ToolResult), result.message)
 

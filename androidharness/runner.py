@@ -44,6 +44,7 @@ def run_task(
     max_turns: int = 40,
     wall_clock_s: float = 600.0,
     quantize_screenshots: bool = False,
+    viewport_filter: bool = False,
 ) -> RunOutcome:
     run_dir = _new_run_dir(runs_root)
     start = time.time()
@@ -88,6 +89,7 @@ def run_task(
         max_turns=max_turns,
         wall_clock_s=wall_clock_s,
         quantize_screenshots=quantize_screenshots,
+        viewport_filter=viewport_filter,
     )
 
     try:

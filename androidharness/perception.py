@@ -123,10 +123,35 @@ def _collect_descendant_text(elem: etree._Element) -> str:
     return " ".join(parts)
 
 
-def parse_hierarchy(xml: str) -> Observation:
+def _is_offscreen(
+    bounds: tuple[int, int, int, int],
+    screen_rect: tuple[int, int, int, int] | None,
+) -> bool:
+    """A node is off-screen if its bounds are degenerate (zero or inverted
+    area) or it sits fully outside the screen rect. When `screen_rect` is
+    None, fall back to dropping only nodes fully above/left of the origin."""
+    x1, y1, x2, y2 = bounds
+    if x1 >= x2 or y1 >= y2:
+        return True
+    if screen_rect is None:
+        return x2 <= 0 or y2 <= 0
+    sx1, sy1, sx2, sy2 = screen_rect
+    return x2 <= sx1 or y2 <= sy1 or x1 >= sx2 or y1 >= sy2
+
+
+def parse_hierarchy(xml: str, *, viewport_filter: bool = False) -> Observation:
     root = etree.fromstring(xml.encode("utf-8"))
     obs = Observation()
     next_id = 1
+
+    # When the viewport filter is on, take the screen rect from the top-level
+    # window node (typical uiautomator dumps: first child of <hierarchy>).
+    screen_rect: tuple[int, int, int, int] | None = None
+    if viewport_filter:
+        for child in root:
+            if child.tag == "node":
+                screen_rect = _parse_bounds(child.get("bounds", ""))
+                break
 
     def walk(elem: etree._Element, *, suppress_text: bool) -> None:
         """
@@ -140,6 +165,19 @@ def parse_hierarchy(xml: str) -> Observation:
             to False for those children).
         """
         nonlocal next_id
+
+        # Viewport filter: drop nodes that are degenerate, off-screen, or
+        # explicitly visibility="gone". A `gone` subtree is dropped entirely
+        # (children also do not lay out). Off-screen subtrees still recurse
+        # in case a child re-enters the viewport — rare but harmless.
+        if viewport_filter:
+            if elem.get("visibility") == "gone":
+                return
+            if _is_offscreen(_parse_bounds(elem.get("bounds", "")), screen_rect):
+                for child in elem:
+                    if child.tag == "node":
+                        walk(child, suppress_text=False)
+                return
 
         interactable = _is_interactable(elem)
         own_label = _own_label(elem)

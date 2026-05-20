@@ -69,3 +69,94 @@ def test_empty_hierarchy_produces_empty_observation():
     obs = parse_hierarchy(xml)
     assert obs.nodes == []
     assert obs.render() == ""
+
+
+# -- Viewport filter (spec §7 step 2) -----------------------------------------
+
+_OFFSCREEN_XML = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[40,200][520,320]" class="android.widget.Button" text="Visible" clickable="true"/>
+    <node bounds="[0,0][0,0]" class="android.widget.Button" text="Degenerate" clickable="true"/>
+    <node bounds="[40,-100][520,-50]" class="android.widget.Button" text="Above" clickable="true"/>
+    <node bounds="[40,2500][520,2600]" class="android.widget.Button" text="Below" clickable="true"/>
+    <node bounds="[-200,200][-50,300]" class="android.widget.Button" text="Left" clickable="true"/>
+    <node bounds="[1200,200][1400,300]" class="android.widget.Button" text="Right" clickable="true"/>
+    <node bounds="[40,400][520,500]" class="android.widget.Button" text="Hidden" visibility="gone" clickable="true"/>
+  </node>
+</hierarchy>
+"""
+
+
+def test_viewport_filter_off_by_default_keeps_offscreen_nodes():
+    obs = parse_hierarchy(_OFFSCREEN_XML)
+    texts = [n.text for n in obs.nodes]
+    # Without the filter, every clickable child shows up (degenerate still emits
+    # — current behavior — because the existing renderer doesn't drop them).
+    assert "Visible" in texts
+    assert "Above" in texts
+    assert "Below" in texts
+
+
+def test_viewport_filter_drops_degenerate_bounds():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Degenerate" not in texts
+
+
+def test_viewport_filter_drops_nodes_fully_above_screen():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Above" not in texts
+
+
+def test_viewport_filter_drops_nodes_fully_below_screen():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Below" not in texts
+
+
+def test_viewport_filter_drops_nodes_fully_left_of_screen():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Left" not in texts
+
+
+def test_viewport_filter_drops_nodes_fully_right_of_screen():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Right" not in texts
+
+
+def test_viewport_filter_drops_visibility_gone():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Hidden" not in texts
+
+
+def test_viewport_filter_keeps_onscreen_node():
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Visible" in texts
+
+
+def test_viewport_filter_keeps_partially_offscreen_node():
+    """A node that has some pixels above the screen but extends down into the
+    viewport must NOT be dropped — its center may still be on-screen."""
+    xml = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout">
+    <node bounds="[40,-10][520,100]" class="android.widget.Button" text="Partial" clickable="true"/>
+  </node>
+</hierarchy>
+"""
+    obs = parse_hierarchy(xml, viewport_filter=True)
+    texts = [n.text for n in obs.nodes]
+    assert "Partial" in texts
+
+
+def test_viewport_filter_dense_ids_after_drops():
+    """Ids must remain dense (1, 2, 3, ...) after off-screen nodes are filtered."""
+    obs = parse_hierarchy(_OFFSCREEN_XML, viewport_filter=True)
+    ids = [n.id for n in obs.nodes]
+    assert ids == list(range(1, len(ids) + 1))

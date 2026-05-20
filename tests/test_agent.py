@@ -137,6 +137,36 @@ def test_agent_invokes_on_turn_callback_per_turn(fake_device, fake_gemini):
     assert seen[1]["tool_call"]["name"] == "done"
 
 
+def test_agent_empty_exception_message_includes_source_frame(fake_device, fake_gemini):
+    """Bare AssertionError (no message) used to produce 'AssertionError:' with
+    a trailing empty colon — useless to the model. The formatter must now fall
+    back to the originating file:line so the model has something to act on."""
+    fake_device.hierarchy_xml = HIERARCHY
+
+    def assert_no_message(*args, **kwargs):
+        # Raise directly so pytest's assertion rewriter does not inject a
+        # message. Mirrors uiautomator2's `assert y >= 0` after the rewriter
+        # is out of the picture (production code).
+        raise AssertionError
+
+    fake_device.scroll = assert_no_message
+
+    client = fake_gemini(
+        [
+            {"name": "scroll", "args": {"id": 1, "direction": "down"}},
+            {"name": "done", "args": {"success": False, "reason": "stop"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    result = agent.run("trigger bare assert")
+
+    msg = result.turn_log[0]["tool_result"]["message"]
+    assert msg.endswith(":") is False, f"trailing-colon-only message: {msg!r}"
+    assert "AssertionError" in msg
+    # The originating frame must be cited.
+    assert " at " in msg and ".py:" in msg
+
+
 def test_agent_quantizes_screenshot_when_enabled(fake_device, fake_gemini):
     """With quantize_screenshots=True, the screenshot in obs_payload should be
     the quantized PNG, not the raw bytes from the device."""
