@@ -5,13 +5,82 @@ import sys
 from pathlib import Path
 
 import typer
+import yaml
 
 from androidharness.agent import GoogleGenaiClient
+from androidharness.config import (
+    AndroidHarnessConfig,
+    ConfigError,
+    default_config_path,
+    load_config,
+    save_config,
+)
 from androidharness.device import UIAutomatorDevice, list_devices
 from androidharness.logging_setup import setup_file_logging
 from androidharness.runner import run_task
 
 app = typer.Typer(add_completion=False, help="AI harness for Android devices.")
+
+config_app = typer.Typer(
+    add_completion=False,
+    help="Inspect or edit the AndroidHarness config file.",
+)
+app.add_typer(config_app, name="config")
+
+
+def _resolve_config_path(path: Path | None) -> Path:
+    return path if path is not None else default_config_path()
+
+
+@config_app.command("path")
+def config_path_cmd(
+    path: Path | None = typer.Option(None, "--path", help="Override the config path."),
+) -> None:
+    """Print the resolved config file path."""
+    typer.echo(str(_resolve_config_path(path)))
+
+
+@config_app.command("init")
+def config_init_cmd(
+    path: Path | None = typer.Option(None, "--path", help="Override the config path."),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing config file."),
+) -> None:
+    """Write a default config file."""
+    target = _resolve_config_path(path)
+    if target.exists() and not force:
+        typer.echo(f"error: config already exists at {target} (use --force to overwrite)", err=True)
+        raise typer.Exit(code=1)
+    written = save_config(AndroidHarnessConfig(), target)
+    typer.echo(f"wrote default config to {written}")
+
+
+@config_app.command("show")
+def config_show_cmd(
+    path: Path | None = typer.Option(None, "--path", help="Override the config path."),
+) -> None:
+    """Print the loaded config as YAML."""
+    target = _resolve_config_path(path)
+    try:
+        cfg = load_config(target)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=1) from e
+    dumped = yaml.safe_dump(cfg.model_dump(mode="json"), sort_keys=False, default_flow_style=False)
+    typer.echo(dumped, nl=False)
+
+
+@config_app.command("validate")
+def config_validate_cmd(
+    path: Path | None = typer.Option(None, "--path", help="Override the config path."),
+) -> None:
+    """Validate the config file. Exits 0 on success, 1 on error."""
+    target = _resolve_config_path(path)
+    try:
+        load_config(target)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=1) from e
+    typer.echo(f"ok: {target}")
 
 
 @app.command("devices")
