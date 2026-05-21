@@ -64,6 +64,7 @@ Passing both flags is an error. With a single device attached, no flag is needed
 | `--run-dir` | `./runs` | Root directory for run artifacts |
 | `--logs-dir` | `./logs` | Directory for the rotating log file |
 | `--config` | `~/.androidharness/config.yaml` | Override the config file path |
+| `--policy` | _none_ | Per-tool policy override, e.g. `tap=confirm,type=deny` (see the [Policy](#policy--gating-destructive-actions) section). |
 
 All defaults come from the config file; CLI flags override them for a single run.
 
@@ -78,6 +79,17 @@ uv run androidharness run "..." --model fast
 With `throttler.enabled: true`, calls flow through `litellm.Router` so they respect per-deployment RPM / TPM budgets and fall back to the next entry in the chain on rate-limit errors. See [configuration.md](configuration.md#throttler) for the on-disk shape.
 
 The throttler is off by default — until you've actually hit a rate limit, the direct `LiteLLMClient` is simpler and fine.
+
+## Policy — gating destructive actions
+
+Pointing the agent at your personal phone? The `policy` gate is the safety net. Out of the box, `type` and `long_press` require a `[y/N]` confirmation at the terminal before the call reaches the device; everything else (`tap`, `swipe`, `scroll`, etc.) is `auto`.
+
+```bash
+# One-off override: dry-run every tap, deny typing entirely.
+uv run androidharness run "..." --policy "tap=dry-run,type=deny"
+```
+
+See [configuration.md](configuration.md#policy) for the full mode reference. The confirm prompt auto-rejects after `policy.confirm_timeout_s` (default 30s) so unattended runs can't accidentally approve destructive actions.
 
 ## Troubleshooting
 

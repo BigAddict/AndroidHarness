@@ -38,7 +38,7 @@ Items 1–5 are the "v2 minimum" per the spec. Items 6+ are the long tail.
 | 1 | **Config schema** — Pydantic `AndroidHarnessConfig` + YAML load/save + CLI integration | **Shipped** | `902d71a`, `c677d16`, `beb4c33`, `558354b` |
 | 2 | Provider seam — LiteLLM + `LLMClient` refactor | **Shipped** | `280f267`, `9b75726`, `8712309`, `b3754a9`, `e577254`, `a1d96b3`, `b49e4a2` |
 | 3 | Throttler — token-bucket + Router fallback | **Shipped** | `61ea308`, `ae02883`, `e1b1ac0`, `2c1c74b`, `f88e55e` |
-| 4 | Policy seam — destructive-action gating | Pending | |
+| 4 | Policy seam — destructive-action gating | **Shipped** | `af1233c`, `181cbcd`, `1f4c813`, `70b1445` |
 | 5 | Web UI v2.0 — Settings UI | Pending | |
 | 6 | Perception compression step 1 — sibling collapse | Pending | |
 | 7 | Storage seam — SQLiteSink + alembic migrations | Pending | |
@@ -70,4 +70,4 @@ A few items landed ahead of their dependency order:
 
 ## Current focus
 
-Milestones 1 (config schema), 2 (LiteLLM provider seam), and 3 (throttler + Router fallback) are complete. Milestones 4 (policy seam) and 5 (Settings UI) remain in the "v2 minimum" block.
+Milestones 1 (config schema), 2 (LiteLLM provider seam), 3 (throttler + Router fallback), and 4 (policy seam) are complete. Milestone 5 (Settings UI) is the last item in the "v2 minimum" block.

@@ -8,6 +8,7 @@ CLI (cli.py)
         ├── Agent (agent.py)
         │     ├── parse_hierarchy (perception.py)   ← reads UI tree each turn
         │     ├── LLMClient (llm.py)                 ← Protocol; LiteLLMClient / LiteLLMRouterClient / GoogleGenaiClient
+        │     ├── Policy (policy.py)                 ← auto / confirm / dry-run / deny gate
         │     └── execute (tools.py)                 ← dispatches tool calls to device
         └── UIAutomatorDevice (device.py)            ← ADB wrapper
 ```
@@ -24,7 +25,7 @@ Entry point for every user-facing command. Registered as the `androidharness` sc
 
 Commands:
 - `androidharness devices` — lists connected devices (serial + model name via `getprop`)
-- `androidharness run <task>` — resolves config, selects device, builds `Agent` + the configured `LLMClient` (`LiteLLMClient` by default; `LiteLLMRouterClient` when `throttler.enabled`; `GoogleGenaiClient` when `providers.use_litellm=false`), calls `run_task`
+- `androidharness run <task>` — resolves config, selects device, builds the per-run `Policy` (config + `--policy` override) and `CliConfirmer`, builds `Agent` + the configured `LLMClient` (`LiteLLMClient` by default; `LiteLLMRouterClient` when `throttler.enabled`; `GoogleGenaiClient` when `providers.use_litellm=false`), calls `run_task`
 - `androidharness config path|init|show|validate` — config file utilities
 
 The `run` command is the main path. It resolves all defaults from `AndroidHarnessConfig`, validates the environment (API key, device presence), then delegates to `runner.run_task`. Exit code is 0 on `success=True`, 1 otherwise.
@@ -37,7 +38,7 @@ Top-level model: `AndroidHarnessConfig` (version-locked to `1`). Sub-models:
 - `DefaultsConfig` — per-run defaults (model, turns, dirs, device serial)
 - `ProvidersConfig` — selects which provider (`gemini` / `anthropic` / `openai`) the CLI uses, and whether to route via LiteLLM or the v1 direct-Gemini client
 - `ThrottlerConfig` — rate limiting, deployments fallback list, cooldown, retries
-- `PolicyConfig` — placeholder for milestone 4 (destructive-action gating)
+- `PolicyConfig` — auto/confirm/dry-run/deny gate per tool; default-mode + confirm_timeout_s; spec-mandated `type:confirm` and `long_press:confirm` defaults
 - `MemoryConfig` — placeholder for milestone 12 (chromadb)
 - `PerceptionConfig` — feature flags (sibling_collapse, viewport_filter, resource_id_in_render, screenshot_quantized)
 - `LoggingConfig` — log level and rotation size
@@ -77,8 +78,8 @@ Key types:
 
 The agent loop and the Gemini API adapter.
 
-`Agent` dataclass (`agent.py:112`):
-- Fields: `device`, `client`, `model`, `max_turns`, `wall_clock_s`, `quantize_screenshots`, `viewport_filter`
+`Agent` dataclass (`agent.py:117`):
+- Fields: `device`, `client`, `model`, `max_turns`, `wall_clock_s`, `quantize_screenshots`, `viewport_filter`, `resource_id_in_render`, `policy`, `confirmer`
 - `run(task, on_turn=None)` — the main loop. Returns a `RunResult` with `status` (`done`|`max_turns`|`timeout`), `success`, `reason`, `turns`, `turn_log`.
 
 Loop behavior per turn:
@@ -86,15 +87,15 @@ Loop behavior per turn:
 2. Dump hierarchy (and screenshot concurrently if requested, using `ThreadPoolExecutor`).
 3. Parse observation, check no-progress detector.
 4. Call `client.generate(...)`.
-5. Dispatch tool call via `execute(device, call, obs)`. Exceptions from device drivers are caught and surfaced as `ToolError` so the agent can react rather than crash.
+5. Dispatch via `policy.apply(call, _run_tool, confirmer)` — `auto` passes through to `execute(device, call, obs)`, `confirm`/`dry-run`/`deny` short-circuit. Exceptions from device drivers are caught inside the `_run_tool` closure and surfaced as `ToolError` so the agent can react rather than crash.
 6. Append turn to `turn_log`, call `on_turn` callback (used by runner to stream writes).
 7. If result is `done`, return immediately.
 
-No-progress detector (`agent.py:78`): if the last 3 turns all issued the identical tool call AND the observation render is unchanged, a `NO_PROGRESS` warning is injected into `contents` before the next model call.
+No-progress detector (`agent.py:89`): if the last 3 turns all issued the identical tool call AND the observation render is unchanged, a `NO_PROGRESS` warning is injected into `contents` before the next model call.
 
 `LLMClient` Protocol + adapters live in `androidharness/llm.py`. Three concrete clients implement it: `LiteLLMClient` (default — direct `litellm.completion` per call), `LiteLLMRouterClient` (selected when `throttler.enabled` — wraps `litellm.Router` for per-deployment rate limiting and ordered fallback on 429 errors), and `GoogleGenaiClient` (escape hatch — direct `google-genai` SDK with its own retry/backoff). All three flatten the agent's internal `contents` list and fall back to `done(success=False)` when the model returns no function call. Two private helpers in the same module translate the agent's tool declarations and contents into OpenAI-shaped schemas, and a third (`_build_router_kwargs`) translates `AndroidHarnessConfig` into the kwargs `litellm.Router(...)` expects.
 
-`SYSTEM_PROMPT` (`agent.py:22`): the static instruction block prepended to every model call. Covers id stability, scroll vs. swipe guidance, no-progress recovery, install avoidance, and the done() contract.
+`SYSTEM_PROMPT` (`agent.py:28`): the static instruction block prepended to every model call. Covers id stability, scroll vs. swipe guidance, no-progress recovery, install avoidance, and the done() contract.
 
 ### `androidharness/tools.py`
 
@@ -119,6 +120,16 @@ Run directory naming: `<YYYYMMDDTHHMMSSz>-<6 hex chars>` (e.g. `20260520T174908Z
 Screenshots are written to `screenshots/turn-NNN.png` and their relative path is added to the turn's JSONL record.
 
 If `agent.run()` raises (e.g., device disconnect), the runner sets `meta["status"] = "crashed"` and re-raises.
+
+### `androidharness/policy.py`
+
+The policy gate the agent consults before every tool call.
+
+- `PolicyDecision` — `Enum(AUTO|CONFIRM|DRY_RUN|DENY)`. String values match the YAML mode strings so `PolicyDecision(cfg_mode)` round-trips.
+- `Policy` — owns the per-tool decision lookup. `decide(name)` returns the resolved `PolicyDecision`; `apply(call, execute_fn, confirmer)` dispatches: `auto` passes through to `execute_fn`; `confirm` asks the injected `Confirmer` and returns the answer-shaped result; `dry-run` returns `ToolResult(message="dry-run: ...")` without touching the device; `deny` returns `ToolError(message="policy=deny: ...")`.
+- `Confirmer` Protocol — single method `ask(call: ToolCall) -> bool`. `CliConfirmer` (default in the CLI) prompts on stderr and reads stdin with a `select`-based timeout. `AlwaysApproveConfirmer` / `AlwaysRejectConfirmer` / `RecordingConfirmer` are test helpers.
+
+The agent loop (`agent.py`) wraps the `tools.execute(...)` call in a closure and hands it to `policy.apply(...)`; the policy's return value is what reaches the agent's turn log.
 
 ### `androidharness/imaging.py`
 

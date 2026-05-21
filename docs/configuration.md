@@ -42,7 +42,7 @@ All fields use `extra="forbid"` — unknown keys cause a validation error.
 | `defaults` | `DefaultsConfig` | see below | Per-run defaults |
 | `providers` | `ProvidersConfig` | see below | Which LLM provider the CLI uses |
 | `throttler` | `ThrottlerConfig` | see below | Rate-limit budgets + Router fallback chains |
-| `policy` | `PolicyConfig` | see below | Destructive-action gating — milestone 4 |
+| `policy` | `PolicyConfig` | see below | Destructive-action gating (confirm/dry-run/deny) |
 | `memory` | `MemoryConfig` | see below | Episodic memory — milestone 12 |
 | `perception` | `PerceptionConfig` | see below | Perception feature flags |
 | `logging` | `LoggingConfig` | see below | Log level and rotation |
@@ -115,10 +115,39 @@ throttler:
 
 ### `policy`
 
+Gates every tool call. Lets you point the agent at your personal phone without worrying that one bad model decision wipes a chat thread or buys a subscription. The agent consults the policy between the LLM's tool choice and the device call.
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `default_mode` | `"auto"` \| `"confirm"` \| `"dry-run"` \| `"deny"` | `"auto"` | Fallback mode for tools not in `per_tool` |
-| `per_tool` | dict[str, mode] | `{}` | Override mode per tool name — fleshed out in milestone 4 |
+| `default_mode` | `"auto"` \| `"confirm"` \| `"dry-run"` \| `"deny"` | `"auto"` | Mode applied to any tool not named in `per_tool`. |
+| `confirm_timeout_s` | int > 0 | `30` | Seconds the CLI confirm prompt waits before auto-rejecting. |
+| `per_tool` | dict[str, mode] | `{type: confirm, long_press: confirm}` | Per-tool overrides. The defaults come from spec §4 — typing and long-press require explicit confirmation on personal devices. |
+
+Modes:
+- `auto` — call the tool as usual.
+- `confirm` — prompt on the CLI (`[y/N]`); rejection returns `ok=False` to the agent, which can react.
+- `dry-run` — skip the device call; return `ok=True` with a `"dry-run: would have called X"` message so the agent can walk a plan end-to-end without touching the phone.
+- `deny` — skip the call; return `ok=False`.
+
+Example:
+
+```yaml
+policy:
+  default_mode: auto
+  confirm_timeout_s: 15
+  per_tool:
+    type: deny           # never type anywhere unattended
+    long_press: confirm  # ask before destructive long-presses
+    tap: auto            # taps are fine
+```
+
+CLI override for a single run:
+
+```bash
+uv run androidharness run "..." --policy "tap=confirm,type=deny"
+```
+
+`--policy` is parsed as a comma-separated `tool=mode` list and merges over `policy.per_tool` for that single run. Modes outside `{auto, confirm, dry-run, deny}` are rejected.
 
 ### `memory`
 
