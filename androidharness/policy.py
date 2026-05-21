@@ -114,7 +114,7 @@ class CliConfirmer:
     rest of the project already assumes a POSIX environment via ADB.
     """
 
-    def __init__(self, timeout_s: float = 30.0) -> None:
+    def __init__(self, timeout_s: int = 30) -> None:
         self._timeout_s = timeout_s
 
     def ask(self, call: ToolCall) -> bool:
