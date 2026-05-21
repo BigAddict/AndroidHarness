@@ -30,7 +30,7 @@ Written before the agent loop starts (so the run is discoverable even if it cras
 {
   "harness_version": "0.1.0",
   "task": "See if you can reach whatsapp and text myself",
-  "model": "gemini-2.5-flash",
+  "model": "gemini/gemini-2.5-flash",
   "device": {
     "serial": "R92XA0AB89Y",
     "model": "a05mxx"
@@ -47,7 +47,7 @@ Written before the agent loop starts (so the run is discoverable even if it cras
 |-------|------|-------------|
 | `harness_version` | string | `androidharness.__version__` at run time |
 | `task` | string | The task prompt passed to `run` |
-| `model` | string | The Gemini model id used |
+| `model` | string | The LiteLLM-shaped model id used (`gemini/gemini-2.5-flash`, `anthropic/claude-haiku-4-5`, or a logical name like `fast` when the throttler is on) |
 | `device.serial` | string | ADB serial |
 | `device.model` | string | `ro.product.model` from `getprop` |
 | `started_at` | float | Unix timestamp (`time.time()`) |
@@ -78,10 +78,10 @@ One JSON object per line, appended and flushed after each turn. Because it is wr
 | `tool_result.role` | string | Always `"tool_result"` |
 | `tool_result.tool` | string | Tool name (or `"system"` for NO_PROGRESS warnings) |
 | `tool_result.ok` | bool | `true` if `ToolResult`, `false` if `ToolError` |
-| `tool_result.message` | string | Result message or error description |
+| `tool_result.message` | string | Result message or error description. Policy-emitted messages start with `"dry-run: ..."`, `"user rejected: ..."`, or `"policy=deny: ..."` (see [configuration.md#policy](configuration.md#policy)). |
 | `screenshot_path` | string | Relative path to the PNG file, present only when `show_screen()` was called that turn |
 
-The `observation_summary` field is the most useful for grepping: it contains the full node list in human-readable form.
+The `observation_summary` field is the most useful for grepping: it contains the full node list in human-readable form. Grepping `tool_result.message` for `dry-run`, `user rejected`, or `policy=deny` surfaces every policy intervention.
 
 ---
 

@@ -1,8 +1,10 @@
 # Agent tool vocabulary
 
-These are the functions exposed to Gemini on every turn via `GEMINI_FUNCTION_DECLARATIONS` (`androidharness/tools.py:144`). The agent calls exactly one per turn.
+These are the functions exposed to the LLM on every turn via `GEMINI_FUNCTION_DECLARATIONS` (`androidharness/tools.py:144`). The agent calls exactly one per turn.
 
 All `id` arguments refer to node ids from the **current turn's** Observation. Ids are not stable across turns — using an id from a previous turn will produce a structured error rather than a crash.
+
+Every tool call passes through the **policy gate** (`androidharness/policy.py`) before reaching the device — `auto` flows through, `confirm` blocks on an interactive `[y/N]` prompt, `dry-run` returns ok=True without touching the device, `deny` returns ok=False. See [configuration.md](configuration.md#policy) for how to set per-tool modes. Defaults out of the box: `type` and `long_press` require confirmation; everything else is `auto`.
 
 ---
 
