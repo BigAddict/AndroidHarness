@@ -360,3 +360,71 @@ class LiteLLMClient:
             args = dict(raw_args or {})
 
         return {"name": name, "args": args}
+
+
+class LiteLLMRouterClient:
+    """LiteLLM Router-backed `LLMClient`. Same contract as `LiteLLMClient`,
+    but routes through `litellm.Router` so calls get per-`(provider, model)`
+    rate limiting and ordered fallback on rate-limit errors.
+
+    The Router is built once at construction time from `_build_router_kwargs(cfg)`.
+    Re-instantiate the client to pick up config changes.
+    """
+
+    def __init__(self, cfg) -> None:
+        # Lazy import — see LiteLLMClient.__init__ for why.
+        from litellm import Router
+
+        kw = _build_router_kwargs(cfg)
+        self._router = Router(**kw)
+
+    def generate(
+        self,
+        *,
+        model: str,
+        system_instruction: str,
+        contents: list,
+        tools: list,
+    ) -> dict:
+        messages = _contents_to_openai_messages(
+            system_instruction=system_instruction,
+            contents=contents,
+        )
+        openai_tools = _tools_to_openai_tools(tools)
+
+        response = self._router.completion(
+            model=model,
+            messages=messages,
+            tools=openai_tools,
+            tool_choice="required",
+        )
+
+        if not response.choices:
+            _llm_log.warning("router returned zero choices for model=%s", model)
+            return {
+                "name": "done",
+                "args": {"success": False, "reason": "model did not call a tool"},
+            }
+
+        message = response.choices[0].message
+        tool_calls = getattr(message, "tool_calls", None) or []
+        if not tool_calls:
+            _llm_log.info("router: no tool_calls in response; falling back to done()")
+            return {
+                "name": "done",
+                "args": {"success": False, "reason": "model did not call a tool"},
+            }
+
+        first = tool_calls[0]
+        name = first.function.name
+        raw_args = first.function.arguments
+        if isinstance(raw_args, str):
+            try:
+                args = json.loads(raw_args) if raw_args else {}
+            except json.JSONDecodeError:
+                _llm_log.warning("router: tool args were not valid JSON: %r", raw_args)
+                args = {}
+        else:
+            args = dict(raw_args or {})
+
+        return {"name": name, "args": args}

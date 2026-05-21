@@ -6,6 +6,7 @@ from androidharness.config import AndroidHarnessConfig
 from androidharness.llm import (
     GoogleGenaiClient,
     LiteLLMClient,
+    LiteLLMRouterClient,
     LLMClient,
     _build_router_kwargs,
     _contents_to_openai_messages,
@@ -402,3 +403,84 @@ def test_build_router_kwargs_forwards_cooldown_and_retries():
     kw = _build_router_kwargs(cfg)
     assert kw["cooldown_time"] == 90
     assert kw["num_retries"] == 5
+
+
+def test_litellm_router_client_routes_via_router_completion(monkeypatch):
+    """LiteLLMRouterClient calls self._router.completion(...) — verify the
+    kwargs forwarded (model, messages, tools, tool_choice) and the response
+    parsing follow the same contract as LiteLLMClient."""
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"fast": ["gemini/gemini-2.5-flash"]}},
+    )
+
+    tool_call = _StubToolCall("tap", json.dumps({"id": 7}))
+    resp = _StubResponse([_StubChoice(_StubMessage(tool_calls=[tool_call]))])
+
+    client = LiteLLMRouterClient(cfg)
+
+    captured: list[dict] = []
+
+    def fake_router_completion(**kwargs):
+        captured.append(kwargs)
+        return resp
+
+    monkeypatch.setattr(client._router, "completion", fake_router_completion)
+
+    out = client.generate(
+        model="fast",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "open settings"}],
+        tools=[
+            {
+                "name": "tap",
+                "description": "Tap.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {"id": {"type": "INTEGER"}},
+                    "required": ["id"],
+                },
+            }
+        ],
+    )
+    assert out == {"name": "tap", "args": {"id": 7}}
+    assert captured[0]["model"] == "fast"
+    assert captured[0]["tool_choice"] == "required"
+    assert captured[0]["messages"][0] == {"role": "system", "content": "SYS"}
+
+
+def test_litellm_router_client_falls_back_to_done_on_empty_choices(monkeypatch):
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"fast": ["gemini/gemini-2.5-flash"]}},
+    )
+    client = LiteLLMRouterClient(cfg)
+    monkeypatch.setattr(client._router, "completion", lambda **kw: _StubResponse([]))
+
+    out = client.generate(
+        model="fast",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[],
+    )
+    assert out["name"] == "done"
+    assert out["args"]["success"] is False
+
+
+def test_litellm_router_client_handles_pre_parsed_dict_args(monkeypatch):
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"fast": ["gemini/gemini-2.5-flash"]}},
+    )
+    client = LiteLLMRouterClient(cfg)
+    tool_call = _StubToolCall("tap", {"id": 3})
+    resp = _StubResponse([_StubChoice(_StubMessage(tool_calls=[tool_call]))])
+    monkeypatch.setattr(client._router, "completion", lambda **kw: resp)
+
+    out = client.generate(
+        model="fast",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[],
+    )
+    assert out == {"name": "tap", "args": {"id": 3}}
