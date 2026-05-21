@@ -8,7 +8,7 @@
 | [uv](https://github.com/astral-sh/uv) | Package manager — replaces pip+venv |
 | ADB (Android Debug Bridge) | Part of the Android SDK Platform Tools |
 | Android device or emulator | USB debugging enabled; confirmed visible in `adb devices` |
-| `GOOGLE_API_KEY` | A Gemini API key from [Google AI Studio](https://aistudio.google.com) |
+| Provider API key | `GEMINI_API_KEY` for the default Gemini provider — get one from [Google AI Studio](https://aistudio.google.com). For Anthropic, set `ANTHROPIC_API_KEY`; for OpenAI, `OPENAI_API_KEY`. The key required is determined by `providers.default` in your config. |
 
 ## Install
 
@@ -24,8 +24,8 @@ uv sync          # creates .venv, installs all deps
 # 1. Confirm ADB sees your device
 adb devices
 
-# 2. Set your key
-export GOOGLE_API_KEY=sk-...
+# 2. Set your key (this is the default; see configuration.md for other providers)
+export GEMINI_API_KEY=...
 
 # 3. Run a task
 uv run androidharness run "Open Settings and show the About Phone screen"
@@ -58,7 +58,7 @@ Passing both flags is an error. With a single device attached, no flag is needed
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--model` | `gemini-2.5-flash` | Any model id accepted by `google-genai` |
+| `--model` | `gemini-2.5-flash` | Any LiteLLM-supported model id. Bare names get the configured provider prefixed automatically (so `gemini-2.5-flash` becomes `gemini/gemini-2.5-flash`); pass a fully-qualified name like `anthropic/claude-haiku-4-5` to override. |
 | `--max-turns` | `40` | Hard cap on agent turns before `max_turns` termination |
 | `--wall-clock` | `600` | Seconds before `timeout` termination |
 | `--run-dir` | `./runs` | Root directory for run artifacts |
@@ -72,8 +72,8 @@ All defaults come from the config file; CLI flags override them for a single run
 **`no devices connected (check 'adb devices')`**
 Run `adb devices`. If the list is empty, ensure USB debugging is on and the device is authorized.
 
-**`GOOGLE_API_KEY env var is not set`**
-Export the variable before running, or add it to your shell profile.
+**`<PROVIDER>_API_KEY env var is not set`**
+Export the variable for whichever provider `providers.default` selects in your config (`GEMINI_API_KEY` by default).
 
 **`config already exists at ~/.androidharness/config.yaml`**
 `androidharness config init --force` to regenerate defaults.

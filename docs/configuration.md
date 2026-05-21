@@ -40,7 +40,7 @@ All fields use `extra="forbid"` — unknown keys cause a validation error.
 |-------|------|---------|-------------|
 | `version` | `1` (literal) | `1` | Schema version. Only `1` is valid. |
 | `defaults` | `DefaultsConfig` | see below | Per-run defaults |
-| `providers` | `ProvidersConfig` | `{}` | Placeholder — milestone 2 |
+| `providers` | `ProvidersConfig` | see below | Which LLM provider the CLI uses |
 | `throttler` | `ThrottlerConfig` | see below | Rate-limit config — milestone 3 |
 | `policy` | `PolicyConfig` | see below | Destructive-action gating — milestone 4 |
 | `memory` | `MemoryConfig` | see below | Episodic memory — milestone 12 |
@@ -57,6 +57,18 @@ All fields use `extra="forbid"` — unknown keys cause a validation error.
 | `runs_dir` | string | `"./runs"` | Root directory for run artifact directories |
 | `logs_dir` | string | `"./logs"` | Directory for the rotating log file |
 | `device_serial` | string or null | `null` | Pre-select a device; bypasses ambiguity check when set |
+
+### `providers`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `use_litellm` | bool | `true` | When `true`, routes all calls through `LiteLLMClient`. Set `false` to fall back to the v1 direct-Gemini `GoogleGenaiClient` (escape hatch if LiteLLM misbehaves). |
+| `default` | string | `"gemini"` | Key into `entries`; selects which provider's `api_key_env` is required and which prefix is added to bare model names. |
+| `entries` | dict[str, `ProviderEntry`] | gemini / anthropic / openai built-ins | Per-provider record: `api_key_env` (env var name holding the key) and `default_model` (LiteLLM-shaped `provider/model` id). |
+
+The default `entries` map ships with three providers — `gemini` (`GEMINI_API_KEY`, `gemini/gemini-2.5-flash`), `anthropic` (`ANTHROPIC_API_KEY`, `anthropic/claude-haiku-4-5`), and `openai` (`OPENAI_API_KEY`, `openai/gpt-4o-mini`). To use Claude or GPT, set `providers.default` to `anthropic` or `openai` and export the matching API key.
+
+Bare model names (e.g. `gemini-2.5-flash`, set via `defaults.model` or `--model`) are automatically prefixed with `providers.default` before they reach LiteLLM — so the user rarely needs to type the prefix by hand. Fully-qualified names (`anthropic/claude-haiku-4-5`) pass through unchanged.
 
 ### `throttler`
 

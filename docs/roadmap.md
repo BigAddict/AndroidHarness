@@ -36,7 +36,7 @@ Items 1–5 are the "v2 minimum" per the spec. Items 6+ are the long tail.
 | # | Milestone | Status | Commit(s) |
 |---|-----------|--------|-----------|
 | 1 | **Config schema** — Pydantic `AndroidHarnessConfig` + YAML load/save + CLI integration | **Shipped** | `902d71a`, `c677d16`, `beb4c33`, `558354b` |
-| 2 | Provider seam — LiteLLM + `LLMClient` refactor | Pending | |
+| 2 | Provider seam — LiteLLM + `LLMClient` refactor | **Shipped** | `280f267`, `9b75726`, `8712309`, `b3754a9`, `e577254`, `a1d96b3`, `b49e4a2` |
 | 3 | Throttler — token-bucket + Router fallback | Pending | |
 | 4 | Policy seam — destructive-action gating | Pending | |
 | 5 | Web UI v2.0 — Settings UI | Pending | |
@@ -45,7 +45,7 @@ Items 1–5 are the "v2 minimum" per the spec. Items 6+ are the long tail.
 | 8 | Web UI v2.1 — live monitoring | Pending | |
 | 9 | OTel spans + JSON exporter | Pending | |
 | 10 | Web UI v2.2 — replay | Pending | |
-| 11 | Perception compression steps 2–3 (viewport filter, resource-id in render) | Partially shipped | Viewport filter shipped `6e81c6b`; resource-id in render pending |
+| 11 | Perception compression steps 2–3 (viewport filter, resource-id in render) | **Shipped** | Viewport filter `6e81c6b`; resource-id in render `615f1a5` |
 | 12 | Vector store layer (a) — `recall_similar_runs` | Pending | |
 | 13 | Web UI v2.3 — launcher | Pending | |
 | 14 | Notification-shade tool pair | **Shipped** | `587107e` (`open_notifications`, `close_notifications` via `adb cmd statusbar`) |
@@ -70,4 +70,4 @@ A few items landed ahead of their dependency order:
 
 ## Current focus
 
-Milestone 1 (config schema) is complete. Per the v2 sequencing note in the spec, milestones 2–5 are the next block: provider seam, throttler, policy seam, and Settings UI. These share the config shape established in milestone 1.
+Milestones 1 (config schema) and 2 (LiteLLM provider seam) are complete — the harness is now multi-provider via `LiteLLMClient`. Milestones 3–5 remain in the "v2 minimum" block: throttler, policy seam, and Settings UI.

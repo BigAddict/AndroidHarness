@@ -1,11 +1,11 @@
 # AndroidHarness — documentation index
 
-AndroidHarness is a Python tool that gives a Gemini LLM a real Android phone and a natural-language task, then lets it work the task to completion by reading the device UI tree and issuing actions over ADB.
+AndroidHarness is a Python tool that gives an LLM (Gemini, Claude, GPT, or any other LiteLLM-supported provider) a real Android phone and a natural-language task, then lets it work the task to completion by reading the device UI tree and issuing actions over ADB.
 
 One command, one task, one device:
 
 ```bash
-export GOOGLE_API_KEY=...
+export GEMINI_API_KEY=...
 uv run androidharness run "Open Settings and toggle Wi-Fi off"
 ```
 

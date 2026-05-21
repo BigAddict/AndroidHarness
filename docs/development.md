@@ -64,7 +64,7 @@ Constructor fields:
 
 ### `FakeGeminiClient`
 
-A scripted stand-in for `GeminiClient`. Constructed with a list of dicts (`{"name": str, "args": dict}`), one per expected `generate()` call. Returns them in order; raises `AssertionError` if called more times than there are entries.
+A scripted stand-in for the `LLMClient` protocol (the fixture predates the rename and the class name stuck). Constructed with a list of dicts (`{"name": str, "args": dict}`), one per expected `generate()` call. Returns them in order; raises `AssertionError` if called more times than there are entries.
 
 ```python
 from tests.conftest import FakeGeminiClient
@@ -135,7 +135,8 @@ androidharness/
   __init__.py      version string
   cli.py           Typer app — commands: devices, run, config *
   config.py        Pydantic schema + load/save
-  agent.py         Agent loop, GeminiClient, SYSTEM_PROMPT
+  agent.py         Agent loop, SYSTEM_PROMPT
+  llm.py           LLMClient Protocol + LiteLLMClient + GoogleGenaiClient
   tools.py         execute() + GEMINI_FUNCTION_DECLARATIONS
   perception.py    XML → Observation (Node list)
   device.py        Device protocol + UIAutomatorDevice

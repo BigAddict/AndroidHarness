@@ -7,7 +7,7 @@ CLI (cli.py)
   └── run_task (runner.py)
         ├── Agent (agent.py)
         │     ├── parse_hierarchy (perception.py)   ← reads UI tree each turn
-        │     ├── GeminiClient (agent.py)            ← calls Gemini API
+        │     ├── LLMClient (llm.py)                 ← Protocol; LiteLLMClient default, GoogleGenaiClient fallback
         │     └── execute (tools.py)                 ← dispatches tool calls to device
         └── UIAutomatorDevice (device.py)            ← ADB wrapper
 ```
@@ -24,7 +24,7 @@ Entry point for every user-facing command. Registered as the `androidharness` sc
 
 Commands:
 - `androidharness devices` — lists connected devices (serial + model name via `getprop`)
-- `androidharness run <task>` — resolves config, selects device, builds `Agent` + `GoogleGenaiClient`, calls `run_task`
+- `androidharness run <task>` — resolves config, selects device, builds `Agent` + the configured `LLMClient` (`LiteLLMClient` by default; `GoogleGenaiClient` when `providers.use_litellm=false`), calls `run_task`
 - `androidharness config path|init|show|validate` — config file utilities
 
 The `run` command is the main path. It resolves all defaults from `AndroidHarnessConfig`, validates the environment (API key, device presence), then delegates to `runner.run_task`. Exit code is 0 on `success=True`, 1 otherwise.
@@ -35,7 +35,7 @@ Pydantic v2 schema for `~/.androidharness/config.yaml`.
 
 Top-level model: `AndroidHarnessConfig` (version-locked to `1`). Sub-models:
 - `DefaultsConfig` — per-run defaults (model, turns, dirs, device serial)
-- `ProvidersConfig` — placeholder for milestone 2 (LiteLLM)
+- `ProvidersConfig` — selects which provider (`gemini` / `anthropic` / `openai`) the CLI uses, and whether to route via LiteLLM or the v1 direct-Gemini client
 - `ThrottlerConfig` — placeholder for milestone 3
 - `PolicyConfig` — placeholder for milestone 4 (destructive-action gating)
 - `MemoryConfig` — placeholder for milestone 12 (chromadb)
@@ -92,7 +92,7 @@ Loop behavior per turn:
 
 No-progress detector (`agent.py:78`): if the last 3 turns all issued the identical tool call AND the observation render is unchanged, a `NO_PROGRESS` warning is injected into `contents` before the next model call.
 
-`GoogleGenaiClient` (`agent.py:247`): adapts `google-genai`. Flattens the internal `contents` list into a single multi-part user message. Retries on 429/5xx with exponential backoff (up to 4 attempts). Falls back to `done(success=False)` when the model returns no function call.
+`LLMClient` Protocol + adapters live in `androidharness/llm.py`. `LiteLLMClient` (the default) routes through `litellm.completion` with `tool_choice="required"` and `num_retries=3`, supporting Gemini / Anthropic / OpenAI / any LiteLLM-supported provider. `GoogleGenaiClient` (fallback) adapts `google-genai` directly with its own 429/5xx exponential backoff. Both flatten the agent's internal `contents` list and fall back to `done(success=False)` when the model returns no function call. Two private helpers in the same module translate the agent's tool declarations and contents into OpenAI-shaped schemas for LiteLLM.
 
 `SYSTEM_PROMPT` (`agent.py:22`): the static instruction block prepended to every model call. Covers id stability, scroll vs. swipe guidance, no-progress recovery, install avoidance, and the done() contract.
 
