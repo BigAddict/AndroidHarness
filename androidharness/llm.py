@@ -111,3 +111,42 @@ class GoogleGenaiClient:
                     return {"name": fc.name, "args": dict(fc.args or {})}
 
         return {"name": "done", "args": {"success": False, "reason": "model did not call a tool"}}
+
+
+def _lowercase_schema(schema: Any) -> Any:
+    """Recursively lowercase any `"type"` field in a JSON-schema-ish dict.
+    Gemini's function declarations use upper-case JSON Schema type names
+    (`"OBJECT"`, `"STRING"`, …). OpenAI / LiteLLM expect lower-case. Leave
+    all other keys untouched."""
+    if isinstance(schema, dict):
+        out = {}
+        for k, v in schema.items():
+            if k == "type" and isinstance(v, str):
+                out[k] = v.lower()
+            else:
+                out[k] = _lowercase_schema(v)
+        return out
+    if isinstance(schema, list):
+        return [_lowercase_schema(x) for x in schema]
+    return schema
+
+
+def _tools_to_openai_tools(tools: list[dict]) -> list[dict]:
+    """Translate Gemini-style function declarations to OpenAI / LiteLLM tool
+    schema. The agent's `GEMINI_FUNCTION_DECLARATIONS` are the single source
+    of truth; this helper exists so we don't have to maintain a parallel
+    OpenAI-shaped copy."""
+    out: list[dict] = []
+    for fd in tools:
+        params = _lowercase_schema(fd.get("parameters", {"type": "object", "properties": {}}))
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": fd["name"],
+                    "description": fd.get("description", ""),
+                    "parameters": params,
+                },
+            }
+        )
+    return out
