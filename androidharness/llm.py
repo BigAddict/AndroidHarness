@@ -217,6 +217,77 @@ def _contents_to_openai_messages(
     return out
 
 
+def _build_router_kwargs(cfg) -> dict:
+    """Translate an AndroidHarnessConfig into kwargs for `litellm.Router(...)`.
+
+    Produces a flat `model_list` covering:
+      * Every (logical_name, concrete_model) pair from `providers.logical_models`,
+        so `router.completion(model="fast")` reaches the primary then falls
+        back through the chain.
+      * Every entry in `providers.logical_models` chains exposed under its own
+        concrete name, so direct `router.completion(model="gemini/gemini-2.5-flash")`
+        also works.
+      * Every key in `throttler.buckets` that isn't already covered above —
+        so concrete-only buckets still get throttled when called directly.
+
+    Rate-limit budgets from `throttler.buckets` are attached to every entry
+    that targets the matching concrete model.
+    """
+    throttler = cfg.throttler
+    providers = cfg.providers
+    bucket_kwargs: dict[str, dict] = {}
+    for key, b in throttler.buckets.items():
+        kw: dict = {}
+        if b.rpm is not None:
+            kw["rpm"] = b.rpm
+        if b.tpm is not None:
+            kw["tpm"] = b.tpm
+        bucket_kwargs[key] = kw
+
+    model_list: list[dict] = []
+    covered_concrete: set[str] = set()
+
+    for logical_name, chain in providers.logical_models.items():
+        primary = chain[0]
+        model_list.append({
+            "model_name": logical_name,
+            "litellm_params": {"model": primary},
+            **bucket_kwargs.get(primary, {}),
+        })
+        for concrete in chain:
+            if concrete in covered_concrete:
+                continue
+            model_list.append({
+                "model_name": concrete,
+                "litellm_params": {"model": concrete},
+                **bucket_kwargs.get(concrete, {}),
+            })
+            covered_concrete.add(concrete)
+
+    for key in throttler.buckets:
+        if key in covered_concrete:
+            continue
+        model_list.append({
+            "model_name": key,
+            "litellm_params": {"model": key},
+            **bucket_kwargs.get(key, {}),
+        })
+        covered_concrete.add(key)
+
+    fallbacks: list[dict] = []
+    for logical_name, chain in providers.logical_models.items():
+        rest = chain[1:]
+        if rest:
+            fallbacks.append({logical_name: list(rest)})
+
+    return {
+        "model_list": model_list,
+        "fallbacks": fallbacks,
+        "cooldown_time": throttler.cooldown_seconds,
+        "num_retries": throttler.num_retries,
+    }
+
+
 class LiteLLMClient:
     """LiteLLM-backed `LLMClient`. One adapter, many providers.
 

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
+from androidharness.config import AndroidHarnessConfig
 from androidharness.llm import (
     GoogleGenaiClient,
     LiteLLMClient,
     LLMClient,
+    _build_router_kwargs,
     _contents_to_openai_messages,
     _tools_to_openai_tools,
 )
@@ -308,3 +310,95 @@ def test_litellm_client_forwards_num_retries_for_transient_errors(monkeypatch):
         tools=[],
     )
     assert captured[0]["num_retries"] == 3
+
+
+def _cfg_with(throttler: dict | None = None, providers: dict | None = None):
+    """Build an AndroidHarnessConfig from partial overrides."""
+    base = AndroidHarnessConfig().model_dump(mode="json")
+    if throttler:
+        base["throttler"].update(throttler)
+    if providers:
+        base["providers"].update(providers)
+    return AndroidHarnessConfig.model_validate(base)
+
+
+def test_build_router_kwargs_emits_one_entry_per_logical_chain_member():
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"fast": [
+            "gemini/gemini-2.5-flash",
+            "anthropic/claude-haiku-4-5",
+        ]}},
+    )
+    kw = _build_router_kwargs(cfg)
+    names = [m["model_name"] for m in kw["model_list"]]
+    targets = [m["litellm_params"]["model"] for m in kw["model_list"]]
+    assert "fast" in names
+    assert "gemini/gemini-2.5-flash" in targets
+    assert "anthropic/claude-haiku-4-5" in targets
+
+
+def test_build_router_kwargs_applies_buckets_to_matching_entries():
+    cfg = _cfg_with(
+        throttler={
+            "enabled": True,
+            "buckets": {
+                "gemini/gemini-2.5-flash": {"rpm": 10, "tpm": 250000},
+            },
+        },
+        providers={"logical_models": {"fast": ["gemini/gemini-2.5-flash"]}},
+    )
+    kw = _build_router_kwargs(cfg)
+    primary = next(m for m in kw["model_list"] if m["model_name"] == "fast")
+    assert primary["rpm"] == 10
+    assert primary["tpm"] == 250000
+
+
+def test_build_router_kwargs_emits_fallbacks_map_in_chain_order():
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"fast": [
+            "gemini/gemini-2.5-flash",
+            "anthropic/claude-haiku-4-5",
+            "openai/gpt-4o-mini",
+        ]}},
+    )
+    kw = _build_router_kwargs(cfg)
+    assert kw["fallbacks"] == [{
+        "fast": ["anthropic/claude-haiku-4-5", "openai/gpt-4o-mini"],
+    }]
+
+
+def test_build_router_kwargs_no_fallbacks_when_single_entry_chain():
+    cfg = _cfg_with(
+        throttler={"enabled": True},
+        providers={"logical_models": {"only": ["gemini/gemini-2.5-flash"]}},
+    )
+    kw = _build_router_kwargs(cfg)
+    assert kw["fallbacks"] == []
+
+
+def test_build_router_kwargs_adds_bare_buckets_as_concrete_entries():
+    """If a bucket names a concrete model that isn't in any logical chain,
+    expose it under its own model_name so a direct `--model gemini/gemini-2.5-flash`
+    call still gets throttled."""
+    cfg = _cfg_with(
+        throttler={
+            "enabled": True,
+            "buckets": {"gemini/gemini-2.5-flash": {"rpm": 10}},
+        },
+    )
+    kw = _build_router_kwargs(cfg)
+    assert any(
+        m["model_name"] == "gemini/gemini-2.5-flash"
+        and m["litellm_params"]["model"] == "gemini/gemini-2.5-flash"
+        and m["rpm"] == 10
+        for m in kw["model_list"]
+    )
+
+
+def test_build_router_kwargs_forwards_cooldown_and_retries():
+    cfg = _cfg_with(throttler={"enabled": True, "cooldown_seconds": 90, "num_retries": 5})
+    kw = _build_router_kwargs(cfg)
+    assert kw["cooldown_time"] == 90
+    assert kw["num_retries"] == 5
