@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+
 from androidharness.llm import (
     GoogleGenaiClient,
+    LiteLLMClient,
     LLMClient,
     _contents_to_openai_messages,
     _tools_to_openai_tools,
@@ -160,3 +163,148 @@ def test_contents_to_openai_messages_skips_unknown_role_silently():
         ],
     )
     assert len(out) == 2
+
+
+class _StubMessage:
+    def __init__(self, *, content=None, tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls or []
+
+
+class _StubFunction:
+    def __init__(self, name: str, arguments: str):
+        self.name = name
+        self.arguments = arguments
+
+
+class _StubToolCall:
+    def __init__(self, name: str, arguments_json):
+        self.function = _StubFunction(name, arguments_json)
+
+
+class _StubChoice:
+    def __init__(self, message: _StubMessage):
+        self.message = message
+
+
+class _StubResponse:
+    def __init__(self, choices):
+        self.choices = choices
+
+
+def _patch_completion(monkeypatch, *, response: _StubResponse):
+    """Patch litellm.completion to return `response` regardless of args. Returns
+    the list it captures into so tests can assert on `model=`, `messages=`,
+    `tools=` it was called with."""
+    captured: list[dict] = []
+
+    def fake_completion(**kwargs):
+        captured.append(kwargs)
+        return response
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    return captured
+
+
+def test_litellm_client_returns_first_tool_call_with_parsed_args(monkeypatch):
+    tool_call = _StubToolCall("tap", json.dumps({"id": 7}))
+    resp = _StubResponse([_StubChoice(_StubMessage(tool_calls=[tool_call]))])
+    captured = _patch_completion(monkeypatch, response=resp)
+
+    client = LiteLLMClient()
+    out = client.generate(
+        model="gemini/gemini-2.5-flash",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "open settings"}],
+        tools=[
+            {
+                "name": "tap",
+                "description": "Tap.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {"id": {"type": "INTEGER"}},
+                    "required": ["id"],
+                },
+            }
+        ],
+    )
+    assert out == {"name": "tap", "args": {"id": 7}}
+
+    assert captured[0]["model"] == "gemini/gemini-2.5-flash"
+    assert captured[0]["tool_choice"] == "required"
+    assert captured[0]["messages"][0] == {"role": "system", "content": "SYS"}
+    assert captured[0]["tools"][0]["function"]["name"] == "tap"
+    assert captured[0]["tools"][0]["function"]["parameters"]["type"] == "object"
+
+
+def test_litellm_client_handles_dict_arguments_already_parsed(monkeypatch):
+    """LiteLLM normally returns `arguments` as a JSON string, but some providers
+    surface it pre-parsed. Accept both."""
+    tool_call = _StubToolCall("tap", {"id": 3})
+    resp = _StubResponse([_StubChoice(_StubMessage(tool_calls=[tool_call]))])
+    _patch_completion(monkeypatch, response=resp)
+
+    client = LiteLLMClient()
+    out = client.generate(
+        model="gemini/gemini-2.5-flash",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[
+            {"name": "tap", "description": "", "parameters": {"type": "OBJECT", "properties": {}}},
+        ],
+    )
+    assert out == {"name": "tap", "args": {"id": 3}}
+
+
+def test_litellm_client_falls_back_to_done_when_no_tool_call(monkeypatch):
+    resp = _StubResponse([_StubChoice(_StubMessage(content="just chatting", tool_calls=[]))])
+    _patch_completion(monkeypatch, response=resp)
+
+    client = LiteLLMClient()
+    out = client.generate(
+        model="gemini/gemini-2.5-flash",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[
+            {"name": "tap", "description": "", "parameters": {"type": "OBJECT", "properties": {}}},
+        ],
+    )
+    assert out == {
+        "name": "done",
+        "args": {"success": False, "reason": "model did not call a tool"},
+    }
+
+
+def test_litellm_client_falls_back_to_done_when_choices_empty(monkeypatch):
+    """Some providers return zero choices on safety blocks. Don't crash — emit
+    a definitive done(success=False) so the run terminates cleanly."""
+    resp = _StubResponse([])
+    _patch_completion(monkeypatch, response=resp)
+
+    client = LiteLLMClient()
+    out = client.generate(
+        model="gemini/gemini-2.5-flash",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[],
+    )
+    assert out["name"] == "done"
+    assert out["args"]["success"] is False
+
+
+def test_litellm_client_forwards_num_retries_for_transient_errors(monkeypatch):
+    """LiteLLM has built-in retry logic; we set num_retries=3 so transient
+    429 / 5xx errors get retried at the SDK level. Verify the kwarg is sent."""
+    tool_call = _StubToolCall("done", json.dumps({"success": True, "reason": "ok"}))
+    resp = _StubResponse([_StubChoice(_StubMessage(tool_calls=[tool_call]))])
+    captured = _patch_completion(monkeypatch, response=resp)
+
+    LiteLLMClient().generate(
+        model="gemini/gemini-2.5-flash",
+        system_instruction="SYS",
+        contents=[{"role": "user", "task": "t"}],
+        tools=[],
+    )
+    assert captured[0]["num_retries"] == 3

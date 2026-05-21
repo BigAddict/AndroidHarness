@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any, Protocol
+
+_llm_log = logging.getLogger("androidharness.llm")
 
 
 class LLMClient(Protocol):
@@ -211,3 +215,77 @@ def _contents_to_openai_messages(
             )
         # else: drop unknown roles silently.
     return out
+
+
+class LiteLLMClient:
+    """LiteLLM-backed `LLMClient`. One adapter, many providers.
+
+    Caller passes `model` in LiteLLM's `provider/model` form
+    (`gemini/gemini-2.5-flash`, `anthropic/claude-haiku-4-5`,
+    `openai/gpt-4o-mini`, …) — see https://docs.litellm.ai/docs/providers.
+    API keys are read from env vars by LiteLLM itself; we don't carry them
+    in the client.
+    """
+
+    def __init__(self, *, num_retries: int = 3) -> None:
+        # Import inside __init__ so importing the module is cheap and tests
+        # that monkeypatch `litellm.completion` work whether they patch before
+        # or after instantiation.
+        import litellm
+
+        self._litellm = litellm
+        self._num_retries = num_retries
+
+    def generate(
+        self,
+        *,
+        model: str,
+        system_instruction: str,
+        contents: list,
+        tools: list,
+    ) -> dict:
+        messages = _contents_to_openai_messages(
+            system_instruction=system_instruction,
+            contents=contents,
+        )
+        openai_tools = _tools_to_openai_tools(tools)
+
+        response = self._litellm.completion(
+            model=model,
+            messages=messages,
+            tools=openai_tools,
+            tool_choice="required",
+            num_retries=self._num_retries,
+        )
+
+        # Safety-blocked / empty-response: definitive done(success=False).
+        if not response.choices:
+            _llm_log.warning("litellm returned zero choices for model=%s", model)
+            return {
+                "name": "done",
+                "args": {"success": False, "reason": "model did not call a tool"},
+            }
+
+        message = response.choices[0].message
+        tool_calls = getattr(message, "tool_calls", None) or []
+        if not tool_calls:
+            _llm_log.info("litellm: no tool_calls in response; falling back to done()")
+            return {
+                "name": "done",
+                "args": {"success": False, "reason": "model did not call a tool"},
+            }
+
+        first = tool_calls[0]
+        name = first.function.name
+        raw_args = first.function.arguments
+        if isinstance(raw_args, str):
+            try:
+                args = json.loads(raw_args) if raw_args else {}
+            except json.JSONDecodeError:
+                _llm_log.warning("litellm: tool args were not valid JSON: %r", raw_args)
+                args = {}
+        else:
+            # Some providers / LiteLLM versions return a pre-parsed dict.
+            args = dict(raw_args or {})
+
+        return {"name": name, "args": args}
