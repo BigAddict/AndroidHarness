@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from androidharness.config import (
     CONFIG_HEADER,
     AndroidHarnessConfig,
+    BucketConfig,
     ConfigError,
     DefaultsConfig,
     LoggingConfig,
@@ -233,3 +234,49 @@ providers:
     assert cfg.providers.use_litellm is False
     assert cfg.providers.default == "anthropic"
     assert cfg.providers.entries["anthropic"].default_model == "anthropic/claude-haiku-4-5"
+
+
+def test_throttler_config_defaults_are_off():
+    t = ThrottlerConfig()
+    assert t.enabled is False
+    assert t.cooldown_seconds == 60
+    assert t.num_retries == 2
+    assert t.buckets == {}
+
+
+def test_bucket_config_rpm_and_tpm_optional():
+    b = BucketConfig()
+    assert b.rpm is None
+    assert b.tpm is None
+
+
+def test_bucket_config_rejects_zero_or_negative():
+    with pytest.raises(ValidationError):
+        BucketConfig(rpm=0)
+    with pytest.raises(ValidationError):
+        BucketConfig(tpm=-1)
+
+
+def test_throttler_config_round_trips_buckets_through_yaml(tmp_path):
+    yaml_text = """\
+version: 1
+throttler:
+  enabled: true
+  cooldown_seconds: 30
+  num_retries: 1
+  buckets:
+    gemini/gemini-2.5-flash:
+      rpm: 10
+      tpm: 250000
+    anthropic/claude-haiku-4-5:
+      rpm: 30
+"""
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml_text)
+    cfg = load_config(p)
+    assert cfg.throttler.enabled is True
+    assert cfg.throttler.cooldown_seconds == 30
+    assert cfg.throttler.num_retries == 1
+    assert cfg.throttler.buckets["gemini/gemini-2.5-flash"].rpm == 10
+    assert cfg.throttler.buckets["gemini/gemini-2.5-flash"].tpm == 250000
+    assert cfg.throttler.buckets["anthropic/claude-haiku-4-5"].tpm is None

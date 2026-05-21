@@ -73,12 +73,30 @@ class ProvidersConfig(BaseModel):
             )
 
 
+class BucketConfig(BaseModel):
+    """Per-(provider, model) rate-limit budget. None means 'no limit'."""
+    model_config = _STRICT
+
+    rpm: int | None = Field(default=None, gt=0)
+    tpm: int | None = Field(default=None, gt=0)
+
+
 class ThrottlerConfig(BaseModel):
-    """Placeholder — fleshed out in milestone 3 (token bucket + Router)."""
+    """Token-bucket + fallback config (milestone 3).
+
+    Routes every LLM call through `litellm.Router` when `enabled`. Each entry
+    in `buckets` is keyed by the concrete LiteLLM-shaped model id
+    (`provider/model`) and gives that deployment's RPM / TPM budget. The
+    Router cools a deployment down for `cooldown_seconds` after a rate-limit
+    error, retrying via the next entry in the matching `logical_models` chain.
+    """
+
     model_config = _STRICT
 
     enabled: bool = False
-    buckets: dict[str, dict] = Field(default_factory=dict)
+    cooldown_seconds: int = Field(default=60, gt=0)
+    num_retries: int = Field(default=2, ge=0)
+    buckets: dict[str, BucketConfig] = Field(default_factory=dict)
 
 
 class PolicyConfig(BaseModel):
