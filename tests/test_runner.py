@@ -111,3 +111,57 @@ def test_run_task_persists_turns_incrementally_on_crash(tmp_path, fake_device):
     crash_result = json.loads((rd / "result.json").read_text())
     assert crash_result["status"] == "crashed"
     assert "simulated LLM outage" in crash_result["reason"]
+
+
+def test_run_task_captures_effective_policy_in_meta(tmp_path, fake_device, fake_gemini):
+    """meta.json must snapshot the policy that was in effect for the run so
+    two artifacts of the same task under different gates are distinguishable.
+    The snapshot uses the same string mode values that round-trip via YAML."""
+    from androidharness.config import PolicyConfig
+    from androidharness.policy import Policy
+
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    result = run_task(
+        task="t",
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        runs_root=tmp_path,
+        policy=Policy.from_config(
+            PolicyConfig(default_mode="auto", per_tool={"type": "deny", "tap": "confirm"})
+        ),
+    )
+    meta = json.loads((Path(result.run_dir) / "meta.json").read_text())
+    assert meta["policy"] == {
+        "default_mode": "auto",
+        "per_tool": {"type": "deny", "tap": "confirm"},
+    }
+
+
+def test_run_task_meta_policy_uses_defaults_when_no_policy_passed(tmp_path, fake_device, fake_gemini):
+    """When the caller passes no policy, the recorded snapshot is the
+    permissive default (auto, empty per_tool) — NOT the spec-mandated
+    PolicyConfig defaults, because run_task only sees the bare Policy()."""
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    result = run_task(
+        task="t",
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        runs_root=tmp_path,
+    )
+    meta = json.loads((Path(result.run_dir) / "meta.json").read_text())
+    assert meta["policy"]["default_mode"] == "auto"
+    assert meta["policy"]["per_tool"] == {}

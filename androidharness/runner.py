@@ -54,6 +54,14 @@ def run_task(
     run_dir = _new_run_dir(runs_root)
     start = time.time()
 
+    # Snapshot the policy that will be in effect so two runs of the same task
+    # under different gates are distinguishable from their artifacts alone.
+    effective_policy = policy or Policy()
+    policy_snapshot = {
+        "default_mode": effective_policy.default.value,
+        "per_tool": {name: dec.value for name, dec in effective_policy.per_tool.items()},
+    }
+
     # Persist meta.json BEFORE the run starts so the run is discoverable even
     # if the loop crashes with no exception handler firing.
     meta: dict[str, Any] = {
@@ -64,6 +72,7 @@ def run_task(
         "started_at": start,
         "max_turns": max_turns,
         "wall_clock_s": wall_clock_s,
+        "policy": policy_snapshot,
         "status": "running",
     }
     _write_json(run_dir / "meta.json", meta)

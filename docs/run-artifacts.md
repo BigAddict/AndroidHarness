@@ -38,6 +38,10 @@ Written before the agent loop starts (so the run is discoverable even if it cras
   "started_at": 1779299348.1695347,
   "max_turns": 40,
   "wall_clock_s": 600.0,
+  "policy": {
+    "default_mode": "auto",
+    "per_tool": {"type": "confirm", "long_press": "confirm"}
+  },
   "status": "done",
   "ended_at": 1779299432.6295907
 }
@@ -53,6 +57,7 @@ Written before the agent loop starts (so the run is discoverable even if it cras
 | `started_at` | float | Unix timestamp (`time.time()`) |
 | `max_turns` | int | Configured turn budget |
 | `wall_clock_s` | float | Configured wall-clock budget (seconds) |
+| `policy` | object | Snapshot of the policy that was in effect: `{default_mode, per_tool}`. Two runs of the same task under different gates are distinguishable from their artifacts alone. |
 | `status` | string | `"running"` while active; final value is one of `done`, `max_turns`, `timeout`, `crashed` |
 | `ended_at` | float | Unix timestamp on completion (absent if crashed before the finally block) |
 
@@ -78,10 +83,10 @@ One JSON object per line, appended and flushed after each turn. Because it is wr
 | `tool_result.role` | string | Always `"tool_result"` |
 | `tool_result.tool` | string | Tool name (or `"system"` for NO_PROGRESS warnings) |
 | `tool_result.ok` | bool | `true` if `ToolResult`, `false` if `ToolError` |
-| `tool_result.message` | string | Result message or error description. Policy-emitted messages start with `"dry-run: ..."`, `"user rejected: ..."`, or `"policy=deny: ..."` (see [configuration.md#policy](configuration.md#policy)). |
+| `tool_result.message` | string | Result message or error description. Policy-emitted messages: `"[confirmed] ..."` (user approved a confirm-mode call, then the device's real message), `"dry-run: ..."`, `"user rejected: ..."`, or `"policy=deny: ..."` (see [configuration.md#policy](configuration.md#policy)). |
 | `screenshot_path` | string | Relative path to the PNG file, present only when `show_screen()` was called that turn |
 
-The `observation_summary` field is the most useful for grepping: it contains the full node list in human-readable form. Grepping `tool_result.message` for `dry-run`, `user rejected`, or `policy=deny` surfaces every policy intervention.
+The `observation_summary` field is the most useful for grepping: it contains the full node list in human-readable form. Grepping `tool_result.message` for `[confirmed]`, `dry-run`, `user rejected`, or `policy=deny` surfaces every policy intervention.
 
 ---
 

@@ -243,3 +243,54 @@ def test_cli_confirmer_writes_a_visible_prompt(monkeypatch, capsys):
     # Tool name and args must both appear so the user knows what to approve.
     assert "type" in captured.out + captured.err
     assert "secret" in captured.out + captured.err
+
+
+def test_policy_apply_confirm_approved_tags_message_with_confirmed_prefix():
+    """An approved confirm-mode call should be distinguishable in the run
+    artifact from a pure auto call. The original ToolResult shape is preserved
+    (is_done, done_success, etc.) so the agent loop still terminates correctly."""
+    p = Policy.from_config(PolicyConfig(per_tool={"type": "confirm"}))
+
+    def fake_execute(call: ToolCall) -> ToolResult:  # noqa: ARG001
+        return ToolResult(message="typed into id 42")
+
+    out = p.apply(
+        ToolCall(name="type", args={"id": 42, "text": "hi"}),
+        fake_execute,
+        AlwaysApproveConfirmer(),
+    )
+    assert isinstance(out, ToolResult)
+    assert out.message == "[confirmed] typed into id 42"
+
+
+def test_policy_apply_confirm_approved_preserves_is_done_signal():
+    """If the confirm-approved call returns is_done=True (e.g. user approved
+    a `done` call wired into confirm mode), the policy must NOT swallow the
+    termination signal while tagging the message."""
+    p = Policy.from_config(PolicyConfig(per_tool={"done": "confirm"}))
+    done_result = ToolResult(
+        message="done", is_done=True, done_success=True, done_reason="ok"
+    )
+    out = p.apply(
+        ToolCall(name="done", args={"success": True, "reason": "ok"}),
+        lambda call: done_result,  # noqa: ARG005
+        AlwaysApproveConfirmer(),
+    )
+    assert isinstance(out, ToolResult)
+    assert out.is_done is True
+    assert out.done_success is True
+    assert out.message.startswith("[confirmed]")
+
+
+def test_policy_apply_confirm_approved_passes_tool_errors_through_unchanged():
+    """If the device raised and execute_fn returned a ToolError, the policy
+    should pass that through without [confirmed]-tagging — the failure mode
+    is what the agent needs to see, not the approval."""
+    p = Policy.from_config(PolicyConfig(per_tool={"tap": "confirm"}))
+    out = p.apply(
+        ToolCall(name="tap", args={"id": 1}),
+        lambda call: ToolError("device boom"),  # noqa: ARG005
+        AlwaysApproveConfirmer(),
+    )
+    assert isinstance(out, ToolError)
+    assert out.message == "device boom"

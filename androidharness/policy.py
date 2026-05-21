@@ -96,7 +96,19 @@ class Policy:
 
         if decision == PolicyDecision.CONFIRM:
             if confirmer.ask(call):
-                return execute_fn(call)
+                # Tag the message so the run artifact distinguishes a
+                # user-approved confirm call from a pure auto call. Errors
+                # pass through untouched — the failure mode is more useful.
+                out = execute_fn(call)
+                if isinstance(out, ToolResult):
+                    return ToolResult(
+                        message=f"[confirmed] {out.message}",
+                        is_done=out.is_done,
+                        done_success=out.done_success,
+                        done_reason=out.done_reason,
+                        requests_screenshot=out.requests_screenshot,
+                    )
+                return out
             return ToolError(f"user rejected: {call.name}({call.args})")
 
         if decision == PolicyDecision.DRY_RUN:
