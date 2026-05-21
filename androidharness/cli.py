@@ -7,7 +7,6 @@ from pathlib import Path
 import typer
 import yaml
 
-from androidharness.agent import GoogleGenaiClient
 from androidharness.config import (
     AndroidHarnessConfig,
     ConfigError,
@@ -16,6 +15,7 @@ from androidharness.config import (
     save_config,
 )
 from androidharness.device import UIAutomatorDevice, list_devices
+from androidharness.llm import GoogleGenaiClient
 from androidharness.logging_setup import setup_file_logging
 from androidharness.runner import run_task
 

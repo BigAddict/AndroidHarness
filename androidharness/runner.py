@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from androidharness import __version__
-from androidharness.agent import Agent, GeminiClient
+from androidharness.agent import Agent
+from androidharness.llm import LLMClient
 
 
 @dataclass
@@ -38,7 +39,7 @@ def run_task(
     *,
     task: str,
     device: Any,
-    client: GeminiClient,
+    client: LLMClient,
     model: str,
     runs_root: Path,
     max_turns: int = 40,
