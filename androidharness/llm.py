@@ -150,3 +150,64 @@ def _tools_to_openai_tools(tools: list[dict]) -> list[dict]:
             }
         )
     return out
+
+
+def _contents_to_openai_messages(
+    *,
+    system_instruction: str,
+    contents: list[dict],
+) -> list[dict]:
+    """Flatten the agent's internal contents into OpenAI chat messages.
+
+    Translation rules:
+      * system_instruction → `{"role": "system", "content": ...}` at index 0.
+      * `{"role": "user", "task": T}` → `{"role": "user", "content": "Task: T"}`.
+      * `{"role": "observation", "text": O}` →
+            `{"role": "user", "content": "Observation:\n" + O}`,
+        plus an inlined `image_url` part when a `"screenshot"` (bytes) is
+        present — uses the OpenAI vision `data:image/png;base64,…` form.
+      * `{"role": "tool_result", "tool": T, "ok": B, "message": M}` →
+            `{"role": "user", "content": "Previous tool T -> ok|error: M"}`.
+      * Unknown roles are dropped silently — keeps the flattener resilient as
+        new roles are added during development.
+
+    We do not emit OpenAI-strict `assistant tool_calls` / `tool` pairs because
+    the agent's contents doesn't carry tool-call ids. The flattened form
+    works against every LiteLLM-supported provider.
+    """
+    import base64
+
+    out: list[dict] = [{"role": "system", "content": system_instruction}]
+    for entry in contents:
+        role = entry.get("role", "")
+        if role == "user":
+            out.append({"role": "user", "content": f"Task: {entry.get('task', '')}"})
+        elif role == "observation":
+            text = f"Observation:\n{entry.get('text', '')}"
+            shot = entry.get("screenshot")
+            if shot:
+                data_url = "data:image/png;base64," + base64.b64encode(shot).decode("ascii")
+                out.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": text},
+                            {"type": "image_url", "image_url": {"url": data_url}},
+                        ],
+                    }
+                )
+            else:
+                out.append({"role": "user", "content": text})
+        elif role == "tool_result":
+            verdict = "ok" if entry.get("ok") else "error"
+            out.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Previous tool {entry.get('tool')} -> "
+                        f"{verdict}: {entry.get('message', '')}"
+                    ),
+                }
+            )
+        # else: drop unknown roles silently.
+    return out
