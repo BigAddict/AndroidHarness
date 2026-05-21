@@ -112,12 +112,30 @@ class ThrottlerConfig(BaseModel):
     buckets: dict[str, BucketConfig] = Field(default_factory=dict)
 
 
+def _default_per_tool_policy() -> dict[str, PolicyMode]:
+    """Spec §4 default policy: typing + long-press require confirmation on personal devices."""
+    return {"type": "confirm", "long_press": "confirm"}
+
+
 class PolicyConfig(BaseModel):
-    """Placeholder — fleshed out in milestone 4 (destructive-action gating)."""
+    """Destructive-action gating (milestone 4).
+
+    The agent consults this before dispatching every tool call. `default_mode`
+    applies to any tool not named in `per_tool`. Modes:
+      * `auto` — call the tool as usual.
+      * `confirm` — block on the injected Confirmer; rejection returns
+        ok=False to the agent.
+      * `dry-run` — skip the device call; return ok=True with a "would have
+        called X" message so the agent can walk a plan without touching the
+        phone.
+      * `deny` — skip and return ok=False.
+    """
+
     model_config = _STRICT
 
     default_mode: PolicyMode = "auto"
-    per_tool: dict[str, PolicyMode] = Field(default_factory=dict)
+    confirm_timeout_s: int = Field(default=30, gt=0)
+    per_tool: dict[str, PolicyMode] = Field(default_factory=_default_per_tool_policy)
 
 
 class MemoryConfig(BaseModel):

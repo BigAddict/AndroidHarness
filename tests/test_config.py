@@ -48,7 +48,8 @@ def test_defaults_section_field_values():
 def test_policy_default_mode_and_per_tool_empty():
     p = PolicyConfig()
     assert p.default_mode == "auto"
-    assert p.per_tool == {}
+    # Spec §4: type + long_press now have default confirm policies
+    assert p.per_tool == {"type": "confirm", "long_press": "confirm"}
 
 
 def test_throttler_disabled_by_default_with_empty_buckets():
@@ -323,3 +324,45 @@ def test_providers_logical_models_rejects_bare_model_name():
             entries=AndroidHarnessConfig().providers.entries,
             logical_models={"fast": ["gemini-2.5-flash"]},
         )
+
+
+def test_policy_config_defaults_include_spec_mandated_confirm_tools():
+    p = PolicyConfig()
+    assert p.default_mode == "auto"
+    assert p.confirm_timeout_s == 30
+    # Spec §4 default policy: type + long_press require confirmation.
+    assert p.per_tool["type"] == "confirm"
+    assert p.per_tool["long_press"] == "confirm"
+
+
+def test_policy_config_user_per_tool_overrides_defaults():
+    """User-provided per_tool must override the spec defaults, not merge."""
+    p = PolicyConfig(per_tool={"type": "auto"})
+    assert p.per_tool["type"] == "auto"
+    # Nothing else carries over — the user-provided dict is authoritative.
+    assert p.per_tool == {"type": "auto"}
+
+
+def test_policy_config_confirm_timeout_rejects_zero_or_negative():
+    with pytest.raises(ValidationError):
+        PolicyConfig(confirm_timeout_s=0)
+    with pytest.raises(ValidationError):
+        PolicyConfig(confirm_timeout_s=-1)
+
+
+def test_policy_config_round_trips_through_yaml(tmp_path):
+    yaml_text = """\
+version: 1
+policy:
+  default_mode: confirm
+  confirm_timeout_s: 5
+  per_tool:
+    tap: auto
+    type: deny
+"""
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml_text)
+    cfg = load_config(p)
+    assert cfg.policy.default_mode == "confirm"
+    assert cfg.policy.confirm_timeout_s == 5
+    assert cfg.policy.per_tool == {"tap": "auto", "type": "deny"}
