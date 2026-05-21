@@ -15,7 +15,7 @@ from androidharness.config import (
     save_config,
 )
 from androidharness.device import UIAutomatorDevice, list_devices
-from androidharness.llm import GoogleGenaiClient
+from androidharness.llm import GoogleGenaiClient, LiteLLMClient
 from androidharness.logging_setup import setup_file_logging
 from androidharness.runner import run_task
 
@@ -158,12 +158,31 @@ def run_cmd(
                 typer.echo(f"  [{i}] {info.serial}  {info.model}", err=True)
             raise typer.Exit(code=1)
 
-    if not os.environ.get("GOOGLE_API_KEY"):
-        typer.echo("error: GOOGLE_API_KEY env var is not set", err=True)
+    providers = cfg.providers
+    if providers.default not in providers.entries:
+        typer.echo(
+            f"error: providers.default={providers.default!r} not found in providers.entries",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    selected = providers.entries[providers.default]
+    if not os.environ.get(selected.api_key_env):
+        typer.echo(
+            f"error: {selected.api_key_env} env var is not set "
+            f"(required for providers.default={providers.default!r})",
+            err=True,
+        )
         raise typer.Exit(code=1)
 
+    # LiteLLM identifies providers by a `provider/model` prefix. If the
+    # resolved model name is bare (no slash), prepend the selected provider —
+    # so `gemini-2.5-flash` becomes `gemini/gemini-2.5-flash`. Names that
+    # already carry a provider prefix (`anthropic/claude-...`) are respected.
+    if providers.use_litellm and "/" not in model:
+        model = f"{providers.default}/{model}"
+
     device = UIAutomatorDevice.connect(chosen)
-    client = GoogleGenaiClient()
+    client = LiteLLMClient() if providers.use_litellm else GoogleGenaiClient()
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     outcome = run_task(
