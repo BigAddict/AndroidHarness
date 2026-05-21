@@ -15,7 +15,7 @@ from androidharness.config import (
     save_config,
 )
 from androidharness.device import UIAutomatorDevice, list_devices
-from androidharness.llm import GoogleGenaiClient, LiteLLMClient
+from androidharness.llm import GoogleGenaiClient, LiteLLMClient, LiteLLMRouterClient
 from androidharness.logging_setup import setup_file_logging
 from androidharness.runner import run_task
 
@@ -159,30 +159,51 @@ def run_cmd(
             raise typer.Exit(code=1)
 
     providers = cfg.providers
+    throttler = cfg.throttler
     if providers.default not in providers.entries:
         typer.echo(
             f"error: providers.default={providers.default!r} not found in providers.entries",
             err=True,
         )
         raise typer.Exit(code=1)
-    selected = providers.entries[providers.default]
-    if not os.environ.get(selected.api_key_env):
-        typer.echo(
-            f"error: {selected.api_key_env} env var is not set "
-            f"(required for providers.default={providers.default!r})",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+
+    # The throttler-on branch checks every fallback provider's key — otherwise
+    # the Router's fallback list contains deployments we can't actually call.
+    required_provider_pairs: list[tuple[str, str]] = [
+        (providers.default, providers.entries[providers.default].api_key_env)
+    ]
+    if throttler.enabled:
+        for chain in providers.logical_models.values():
+            for concrete in chain:
+                prov = concrete.split("/", 1)[0]
+                if prov in providers.entries:
+                    pair = (prov, providers.entries[prov].api_key_env)
+                    if pair not in required_provider_pairs:
+                        required_provider_pairs.append(pair)
+
+    for prov, env_var in required_provider_pairs:
+        if not os.environ.get(env_var):
+            typer.echo(
+                f"error: {env_var} env var is not set (required for provider {prov!r})",
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
     # LiteLLM identifies providers by a `provider/model` prefix. If the
-    # resolved model name is bare (no slash), prepend the selected provider —
-    # so `gemini-2.5-flash` becomes `gemini/gemini-2.5-flash`. Names that
-    # already carry a provider prefix (`anthropic/claude-...`) are respected.
-    if providers.use_litellm and "/" not in model:
+    # resolved model name is bare (no slash), prepend the configured default
+    # provider — so `gemini-2.5-flash` becomes `gemini/gemini-2.5-flash`.
+    # Names that already carry a provider prefix (`anthropic/claude-...`) or
+    # match a logical model name are respected.
+    if providers.use_litellm and "/" not in model and model not in providers.logical_models:
         model = f"{providers.default}/{model}"
 
     device = UIAutomatorDevice.connect(chosen)
-    client = LiteLLMClient() if providers.use_litellm else GoogleGenaiClient()
+    if not providers.use_litellm:
+        client = GoogleGenaiClient()
+    elif throttler.enabled:
+        client = LiteLLMRouterClient(cfg)
+    else:
+        client = LiteLLMClient()
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     outcome = run_task(

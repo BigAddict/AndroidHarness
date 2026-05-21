@@ -196,3 +196,80 @@ def test_cli_run_errors_when_selected_provider_api_key_env_var_missing(tmp_path,
     # default mix_stderr behavior. Search both for resilience across Click versions.
     combined = (result.output or "") + (getattr(result, "stderr", "") or "")
     assert "GEMINI_API_KEY" in combined
+
+
+def test_cli_run_uses_router_client_when_throttler_enabled(tmp_path, monkeypatch):
+    cfg = AndroidHarnessConfig().model_dump(mode="json")
+    cfg["throttler"]["enabled"] = True
+    cfg["providers"]["logical_models"] = {"fast": ["gemini/gemini-2.5-flash"]}
+    cfg_path = _write_cfg(tmp_path, cfg)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test")
+
+    with patch("androidharness.cli.LiteLLMRouterClient") as router, \
+         patch("androidharness.cli.LiteLLMClient") as lite, \
+         patch("androidharness.cli.GoogleGenaiClient") as google, \
+         patch("androidharness.cli.UIAutomatorDevice.connect"), \
+         patch("androidharness.cli.list_devices", return_value=[
+             type("I", (), {"serial": "FAKE", "model": "FakePixel"})(),
+         ]), \
+         patch("androidharness.cli.run_task") as run_task:
+        run_task.return_value = type("O", (), {
+            "run_dir": "/tmp/x", "status": "done", "success": True,
+            "reason": "ok", "turns": 1,
+        })()
+        result = runner.invoke(app, ["run", "open settings", "--config", str(cfg_path)])
+
+    assert result.exit_code == 0, result.stdout
+    router.assert_called_once()
+    lite.assert_not_called()
+    google.assert_not_called()
+
+
+def test_cli_run_keeps_litellm_client_when_throttler_disabled(tmp_path, monkeypatch):
+    cfg = AndroidHarnessConfig().model_dump(mode="json")
+    cfg["throttler"]["enabled"] = False
+    cfg_path = _write_cfg(tmp_path, cfg)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test")
+
+    with patch("androidharness.cli.LiteLLMRouterClient") as router, \
+         patch("androidharness.cli.LiteLLMClient") as lite, \
+         patch("androidharness.cli.GoogleGenaiClient") as google, \
+         patch("androidharness.cli.UIAutomatorDevice.connect"), \
+         patch("androidharness.cli.list_devices", return_value=[
+             type("I", (), {"serial": "FAKE", "model": "FakePixel"})(),
+         ]), \
+         patch("androidharness.cli.run_task") as run_task:
+        run_task.return_value = type("O", (), {
+            "run_dir": "/tmp/x", "status": "done", "success": True,
+            "reason": "ok", "turns": 1,
+        })()
+        result = runner.invoke(app, ["run", "open settings", "--config", str(cfg_path)])
+
+    assert result.exit_code == 0, result.stdout
+    lite.assert_called_once()
+    router.assert_not_called()
+    google.assert_not_called()
+
+
+def test_cli_run_with_throttler_requires_keys_for_every_fallback_provider(tmp_path, monkeypatch):
+    """With throttler enabled and a chain that includes anthropic, the CLI
+    must require ANTHROPIC_API_KEY too — not just the default provider's key."""
+    cfg = AndroidHarnessConfig().model_dump(mode="json")
+    cfg["throttler"]["enabled"] = True
+    cfg["providers"]["logical_models"] = {"fast": [
+        "gemini/gemini-2.5-flash",
+        "anthropic/claude-haiku-4-5",
+    ]}
+    cfg_path = _write_cfg(tmp_path, cfg)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-test")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with patch("androidharness.cli.UIAutomatorDevice.connect"), \
+         patch("androidharness.cli.list_devices", return_value=[
+             type("I", (), {"serial": "FAKE", "model": "FakePixel"})(),
+         ]):
+        result = runner.invoke(app, ["run", "open settings", "--config", str(cfg_path)])
+
+    assert result.exit_code == 1
+    combined = (result.output or "") + (getattr(result, "stderr", "") or "")
+    assert "ANTHROPIC_API_KEY" in combined
