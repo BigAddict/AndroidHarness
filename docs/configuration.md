@@ -41,7 +41,7 @@ All fields use `extra="forbid"` — unknown keys cause a validation error.
 | `version` | `1` (literal) | `1` | Schema version. Only `1` is valid. |
 | `defaults` | `DefaultsConfig` | see below | Per-run defaults |
 | `providers` | `ProvidersConfig` | see below | Which LLM provider the CLI uses |
-| `throttler` | `ThrottlerConfig` | see below | Rate-limit config — milestone 3 |
+| `throttler` | `ThrottlerConfig` | see below | Rate-limit budgets + Router fallback chains |
 | `policy` | `PolicyConfig` | see below | Destructive-action gating — milestone 4 |
 | `memory` | `MemoryConfig` | see below | Episodic memory — milestone 12 |
 | `perception` | `PerceptionConfig` | see below | Perception feature flags |
@@ -70,12 +70,48 @@ The default `entries` map ships with three providers — `gemini` (`GEMINI_API_K
 
 Bare model names (e.g. `gemini-2.5-flash`, set via `defaults.model` or `--model`) are automatically prefixed with `providers.default` before they reach LiteLLM — so the user rarely needs to type the prefix by hand. Fully-qualified names (`anthropic/claude-haiku-4-5`) pass through unchanged.
 
+#### Logical models (fallback chains)
+
+`providers.logical_models` defines alias names that resolve to an ordered chain of concrete deployments. The first entry is the primary; on rate-limit / quota errors the Router falls through to the next entry.
+
+```yaml
+providers:
+  logical_models:
+    fast:
+      - gemini/gemini-2.5-flash
+      - anthropic/claude-haiku-4-5
+      - openai/gpt-4o-mini
+    smart:
+      - anthropic/claude-sonnet-4-6
+```
+
+With this config, `androidharness run "..." --model fast` starts on Gemini and falls back to Claude then GPT-4o-mini on rate-limit errors. Every entry must be in `provider/model` form. When `throttler.enabled` is true, every distinct provider in any chain must have its `api_key_env` set; the CLI checks this up-front.
+
 ### `throttler`
+
+Routes every LLM call through `litellm.Router` when enabled, adding proactive rate limiting and reactive fallback on 429 / quota errors.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | bool | `false` | Whether throttling is active |
-| `buckets` | dict | `{}` | Per-(provider, model) bucket config — fleshed out in milestone 3 |
+| `enabled` | bool | `false` | When true, the CLI uses `LiteLLMRouterClient` instead of the direct `LiteLLMClient`. |
+| `cooldown_seconds` | int > 0 | `60` | How long Router waits before re-trying a rate-limited deployment. |
+| `num_retries` | int >= 0 | `2` | Retries against the same deployment before consulting the fallback list. |
+| `buckets` | dict[str, `BucketConfig`] | `{}` | Per-deployment rate-limit budget. Keys are LiteLLM-shaped `provider/model` ids; values are `{rpm: int?, tpm: int?}`. Both rpm and tpm are optional — `None` means no limit. |
+
+Example:
+
+```yaml
+throttler:
+  enabled: true
+  cooldown_seconds: 60
+  num_retries: 2
+  buckets:
+    gemini/gemini-2.5-flash:
+      rpm: 10
+      tpm: 250000
+    anthropic/claude-haiku-4-5:
+      rpm: 30
+```
 
 ### `policy`
 

@@ -67,6 +67,18 @@ Passing both flags is an error. With a single device attached, no flag is needed
 
 All defaults come from the config file; CLI flags override them for a single run.
 
+## Logical model names and the throttler
+
+If you've set up logical model names in your config, pass them as `--model`:
+
+```bash
+uv run androidharness run "..." --model fast
+```
+
+With `throttler.enabled: true`, calls flow through `litellm.Router` so they respect per-deployment RPM / TPM budgets and fall back to the next entry in the chain on rate-limit errors. See [configuration.md](configuration.md#throttler) for the on-disk shape.
+
+The throttler is off by default — until you've actually hit a rate limit, the direct `LiteLLMClient` is simpler and fine.
+
 ## Troubleshooting
 
 **`no devices connected (check 'adb devices')`**
