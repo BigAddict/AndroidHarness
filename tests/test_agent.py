@@ -1,5 +1,12 @@
 
 from androidharness.agent import Agent, RunResult
+from androidharness.config import PolicyConfig
+from androidharness.policy import (
+    AlwaysApproveConfirmer,
+    AlwaysRejectConfirmer,
+    Policy,
+    RecordingConfirmer,
+)
 
 HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy rotation="0">
@@ -231,3 +238,124 @@ def test_no_progress_warning_injected_after_3_identical_stalled_turns(
     # And the first call should NOT have a warning — nothing to detect yet.
     first_call_contents = client.generate_calls[0]["contents"]
     assert "NO_PROGRESS" not in " ".join(str(c) for c in first_call_contents)
+
+
+def test_agent_default_policy_passes_calls_through_unchanged(fake_device, fake_gemini):
+    """Existing behavior preservation: with the default permissive Policy,
+    the agent dispatches every tool call to the device, just like before."""
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    result = agent.run("open settings")
+    assert result.status == "done"
+    # The tap actually reached the device.
+    assert any(c[0] == "tap" for c in fake_device.calls)
+
+
+def test_agent_confirm_mode_asks_confirmer_and_routes_rejection_back(
+    fake_device, fake_gemini
+):
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "type", "args": {"id": 1, "text": "secret"}},
+            {"name": "done", "args": {"success": False, "reason": "rejected"}},
+        ]
+    )
+    confirmer = RecordingConfirmer(answers=[False])
+    agent = Agent(
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        max_turns=10,
+        policy=Policy.from_config(PolicyConfig(per_tool={"type": "confirm"})),
+        confirmer=confirmer,
+    )
+    result = agent.run("type some text")
+
+    assert result.status == "done"
+    # The confirmer was called once with the type call.
+    assert len(confirmer.calls) == 1
+    assert confirmer.calls[0].name == "type"
+    # The device was NEVER asked to type — the policy blocked it.
+    assert not any(c[0] == "type_text" for c in fake_device.calls)
+    # The rejection reached the model as a tool_result with ok=False.
+    second_call_contents = client.generate_calls[1]["contents"]
+    rendered = " ".join(str(c) for c in second_call_contents)
+    assert "user rejected" in rendered.lower()
+
+
+def test_agent_dry_run_mode_short_circuits_and_marks_ok_true(fake_device, fake_gemini):
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": True, "reason": "dry-ran"}},
+        ]
+    )
+    agent = Agent(
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        max_turns=10,
+        policy=Policy.from_config(PolicyConfig(per_tool={"tap": "dry-run"})),
+        confirmer=AlwaysRejectConfirmer(),
+    )
+    result = agent.run("tap something")
+
+    assert result.status == "done"
+    # The device was NEVER tapped.
+    assert not any(c[0] == "tap" for c in fake_device.calls)
+    # The tool_result the model saw was ok=True.
+    tr = result.turn_log[0]["tool_result"]
+    assert tr["ok"] is True
+    assert "dry-run" in tr["message"].lower()
+
+
+def test_agent_deny_mode_short_circuits_and_marks_ok_false(fake_device, fake_gemini):
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "tap", "args": {"id": 1}},
+            {"name": "done", "args": {"success": False, "reason": "denied"}},
+        ]
+    )
+    agent = Agent(
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        max_turns=10,
+        policy=Policy.from_config(PolicyConfig(per_tool={"tap": "deny"})),
+        confirmer=AlwaysApproveConfirmer(),
+    )
+    result = agent.run("tap something")
+
+    assert not any(c[0] == "tap" for c in fake_device.calls)
+    tr = result.turn_log[0]["tool_result"]
+    assert tr["ok"] is False
+    assert "deny" in tr["message"].lower()
+
+
+def test_agent_confirm_approved_lets_call_through_to_device(fake_device, fake_gemini):
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "type", "args": {"id": 1, "text": "hi"}},
+            {"name": "done", "args": {"success": True, "reason": "ok"}},
+        ]
+    )
+    agent = Agent(
+        device=fake_device,
+        client=client,
+        model="gemini-2.5-flash",
+        max_turns=10,
+        policy=Policy.from_config(PolicyConfig(per_tool={"type": "confirm"})),
+        confirmer=AlwaysApproveConfirmer(),
+    )
+    agent.run("type some text")
+    assert any(c[0] == "type_text" for c in fake_device.calls)

@@ -10,6 +10,7 @@ from typing import Any, Literal
 from androidharness.imaging import quantize_png
 from androidharness.llm import LLMClient
 from androidharness.perception import parse_hierarchy
+from androidharness.policy import AlwaysRejectConfirmer, Confirmer, Policy
 from androidharness.tools import (
     GEMINI_FUNCTION_DECLARATIONS,
     ToolCall,
@@ -122,6 +123,11 @@ class Agent:
     quantize_screenshots: bool = False
     viewport_filter: bool = False
     resource_id_in_render: bool = False
+    policy: Policy = field(default_factory=Policy)
+    # AlwaysRejectConfirmer: fail-closed default. If a caller enables `confirm`
+    # mode without injecting a real confirmer, the call is rejected rather than
+    # silently approved.
+    confirmer: Confirmer = field(default_factory=AlwaysRejectConfirmer)
 
     def run(
         self,
@@ -197,14 +203,21 @@ class Agent:
             call = ToolCall(name=raw["name"], args=dict(raw.get("args", {})))
             _log.info("turn %d: model called %s(%s)", turn_idx, call.name, call.args)
 
-            try:
-                result = execute(self.device, call, obs)
-            except Exception as e:
-                # Device drivers can raise transport errors, assertion errors,
-                # etc. mid-call. Surface as ToolError so the agent gets a chance
-                # to react instead of crashing the whole run.
-                _log.exception("turn %d: tool dispatch raised", turn_idx)
-                result = ToolError(f"tool {call.name} raised {_format_exception(e)}")
+            def _run_tool(
+                c: ToolCall,
+                _obs=obs,
+                _turn_idx=turn_idx,
+            ) -> ToolResult | ToolError:
+                # Keep the original exception-to-ToolError shielding around
+                # the device call; policy.apply will receive the result either
+                # way and forward it to the model.
+                try:
+                    return execute(self.device, c, _obs)
+                except Exception as e:
+                    _log.exception("turn %d: tool dispatch raised", _turn_idx)
+                    return ToolError(f"tool {c.name} raised {_format_exception(e)}")
+
+            result = self.policy.apply(call, _run_tool, self.confirmer)
             _log.info("turn %d: result ok=%s msg=%s",
                       turn_idx, isinstance(result, ToolResult), result.message)
 
