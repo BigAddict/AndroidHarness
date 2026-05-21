@@ -64,6 +64,7 @@ class ProvidersConfig(BaseModel):
     use_litellm: bool = True
     default: str = "gemini"
     entries: dict[str, ProviderEntry] = Field(default_factory=_default_provider_entries)
+    logical_models: dict[str, list[str]] = Field(default_factory=dict)
 
     def model_post_init(self, __context) -> None:  # noqa: D401  (pydantic hook)
         if self.default not in self.entries:
@@ -71,6 +72,18 @@ class ProvidersConfig(BaseModel):
                 f"providers.default={self.default!r} is not a key in providers.entries "
                 f"(have: {sorted(self.entries)})"
             )
+        for name, chain in self.logical_models.items():
+            if not chain:
+                raise ValueError(
+                    f"providers.logical_models[{name!r}] is empty — a logical model must "
+                    "have at least one concrete model entry"
+                )
+            for entry in chain:
+                if "/" not in entry:
+                    raise ValueError(
+                        f"providers.logical_models[{name!r}] entry {entry!r} is not in "
+                        "`provider/model` form (e.g. 'gemini/gemini-2.5-flash')"
+                    )
 
 
 class BucketConfig(BaseModel):

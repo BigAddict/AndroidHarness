@@ -280,3 +280,46 @@ throttler:
     assert cfg.throttler.buckets["gemini/gemini-2.5-flash"].rpm == 10
     assert cfg.throttler.buckets["gemini/gemini-2.5-flash"].tpm == 250000
     assert cfg.throttler.buckets["anthropic/claude-haiku-4-5"].tpm is None
+
+
+def test_providers_logical_models_default_is_empty():
+    cfg = AndroidHarnessConfig()
+    assert cfg.providers.logical_models == {}
+
+
+def test_providers_logical_models_round_trip(tmp_path):
+    yaml_text = """\
+version: 1
+providers:
+  logical_models:
+    fast:
+      - gemini/gemini-2.5-flash
+      - anthropic/claude-haiku-4-5
+"""
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml_text)
+    cfg = load_config(p)
+    assert cfg.providers.logical_models == {
+        "fast": ["gemini/gemini-2.5-flash", "anthropic/claude-haiku-4-5"],
+    }
+
+
+def test_providers_logical_models_rejects_empty_chain():
+    """A logical model with no entries is meaningless — reject at validation."""
+    with pytest.raises(ValueError):
+        ProvidersConfig(
+            default="gemini",
+            entries=AndroidHarnessConfig().providers.entries,
+            logical_models={"fast": []},
+        )
+
+
+def test_providers_logical_models_rejects_bare_model_name():
+    """Every entry must be in LiteLLM's `provider/model` form so it routes
+    correctly. A bare `gemini-2.5-flash` (no slash) is rejected."""
+    with pytest.raises(ValueError):
+        ProvidersConfig(
+            default="gemini",
+            entries=AndroidHarnessConfig().providers.entries,
+            logical_models={"fast": ["gemini-2.5-flash"]},
+        )
