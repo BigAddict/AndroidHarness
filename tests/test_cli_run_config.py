@@ -273,3 +273,45 @@ def test_cli_run_with_throttler_requires_keys_for_every_fallback_provider(tmp_pa
     assert result.exit_code == 1
     combined = (result.output or "") + (getattr(result, "stderr", "") or "")
     assert "ANTHROPIC_API_KEY" in combined
+
+
+def test_cli_policy_flag_overrides_config_per_tool(isolated_home, stub_run, tmp_path):
+    """--policy is parsed as tool=mode pairs and merged over cfg.policy.per_tool
+    for the single run. The merged policy reaches the agent via run_task."""
+    cfg = isolated_home / ".androidharness" / "config.yaml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("policy:\n  default_mode: auto\n  per_tool: {type: confirm}\n")
+    result = runner.invoke(
+        app,
+        ["run", "test task", "--policy", "tap=deny,type=auto"],
+    )
+    assert result.exit_code == 0, result.stdout
+    # The merged policy passed to run_task should have the CLI overrides applied.
+    policy = stub_run["policy"]
+    assert policy.decide("tap").value == "deny"
+    assert policy.decide("type").value == "auto"
+
+
+def test_cli_policy_flag_rejects_unknown_mode(isolated_home, stub_run):
+    result = runner.invoke(app, ["run", "test", "--policy", "tap=banana"])
+    assert result.exit_code != 0
+    combined = (result.output or "") + (getattr(result, "stderr", "") or "")
+    assert "policy" in combined.lower()
+    assert "banana" in combined
+
+
+def test_cli_policy_flag_rejects_malformed_pair(isolated_home, stub_run):
+    """Must be `tool=mode` — missing `=` is a hard error."""
+    result = runner.invoke(app, ["run", "test", "--policy", "tap"])
+    assert result.exit_code != 0
+
+
+def test_cli_run_passes_confirm_timeout_from_config(isolated_home, stub_run, tmp_path):
+    cfg = isolated_home / ".androidharness" / "config.yaml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("policy:\n  confirm_timeout_s: 7\n")
+    result = runner.invoke(app, ["run", "test"])
+    assert result.exit_code == 0, result.stdout
+    # The CliConfirmer instance reached run_task with the configured timeout.
+    confirmer = stub_run["confirmer"]
+    assert getattr(confirmer, "_timeout_s", None) == 7

@@ -32,6 +32,32 @@ def _resolve_config_path(path: Path | None) -> Path:
     return path if path is not None else default_config_path()
 
 
+_VALID_POLICY_MODES = {"auto", "confirm", "dry-run", "deny"}
+
+
+def _parse_policy_overrides(raw: str | None) -> dict[str, str]:
+    """Parse a `--policy tap=confirm,type=deny` string into a per_tool dict.
+    Returns {} when `raw` is None or empty. Raises typer.BadParameter on
+    malformed input."""
+    if not raw:
+        return {}
+    out: dict[str, str] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if "=" not in pair:
+            raise typer.BadParameter(
+                f"--policy entry {pair!r} is not in `tool=mode` form"
+            )
+        tool, mode = (p.strip() for p in pair.split("=", 1))
+        if mode not in _VALID_POLICY_MODES:
+            raise typer.BadParameter(
+                f"--policy mode {mode!r} for tool {tool!r} must be one of "
+                f"{sorted(_VALID_POLICY_MODES)}"
+            )
+        out[tool] = mode
+    return out
+
+
 @config_app.command("path")
 def config_path_cmd(
     path: Path | None = typer.Option(None, "--path", help="Override the config path."),
@@ -105,12 +131,25 @@ def run_cmd(
     runs_dir: Path | None = typer.Option(None, "--run-dir"),
     logs_dir: Path | None = typer.Option(None, "--logs-dir"),
     config_path: Path | None = typer.Option(None, "--config", help="Override the config path."),
+    policy_override: str | None = typer.Option(
+        None, "--policy",
+        help="Per-tool policy override, e.g. `tap=confirm,type=deny`.",
+    ),
 ) -> None:
     try:
         cfg = load_config(config_path)
     except ConfigError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=1) from e
+
+    # Build the per-run Policy from config + CLI override.
+    from androidharness.policy import CliConfirmer, Policy
+    overrides = _parse_policy_overrides(policy_override)
+    merged_per_tool = {**cfg.policy.per_tool, **overrides}
+    policy = Policy.from_config(
+        cfg.policy.model_copy(update={"per_tool": merged_per_tool})
+    )
+    confirmer = CliConfirmer(timeout_s=cfg.policy.confirm_timeout_s)
 
     d = cfg.defaults
     model = model if model is not None else d.model
@@ -217,6 +256,8 @@ def run_cmd(
         quantize_screenshots=cfg.perception.screenshot_quantized,
         viewport_filter=cfg.perception.viewport_filter,
         resource_id_in_render=cfg.perception.resource_id_in_render,
+        policy=policy,
+        confirmer=confirmer,
     )
     typer.echo(f"run dir: {outcome.run_dir}")
     typer.echo(f"status:  {outcome.status}")
