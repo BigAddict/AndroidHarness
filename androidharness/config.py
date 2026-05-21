@@ -24,9 +24,53 @@ class DefaultsConfig(BaseModel):
     device_serial: str | None = None
 
 
-class ProvidersConfig(BaseModel):
-    """Placeholder — fleshed out in milestone 2 (LiteLLM provider seam)."""
+class ProviderEntry(BaseModel):
     model_config = _STRICT
+
+    api_key_env: str
+    default_model: str
+
+
+def _default_provider_entries() -> dict[str, ProviderEntry]:
+    return {
+        "gemini": ProviderEntry(
+            api_key_env="GEMINI_API_KEY",
+            default_model="gemini/gemini-2.5-flash",
+        ),
+        "anthropic": ProviderEntry(
+            api_key_env="ANTHROPIC_API_KEY",
+            default_model="anthropic/claude-haiku-4-5",
+        ),
+        "openai": ProviderEntry(
+            api_key_env="OPENAI_API_KEY",
+            default_model="openai/gpt-4o-mini",
+        ),
+    }
+
+
+class ProvidersConfig(BaseModel):
+    """Provider seam config (milestone 2).
+
+    * `use_litellm` is an escape hatch — set False to fall back to the v1
+      `GoogleGenaiClient` while LiteLLM is still bedding in.
+    * `default` selects which entry of `entries` the CLI uses when the user
+      doesn't pass --model.
+    * Each entry names the env var holding the API key and the LiteLLM-shaped
+      model identifier (`provider/model`).
+    """
+
+    model_config = _STRICT
+
+    use_litellm: bool = True
+    default: str = "gemini"
+    entries: dict[str, ProviderEntry] = Field(default_factory=_default_provider_entries)
+
+    def model_post_init(self, __context) -> None:  # noqa: D401  (pydantic hook)
+        if self.default not in self.entries:
+            raise ValueError(
+                f"providers.default={self.default!r} is not a key in providers.entries "
+                f"(have: {sorted(self.entries)})"
+            )
 
 
 class ThrottlerConfig(BaseModel):

@@ -13,6 +13,7 @@ from androidharness.config import (
     MemoryConfig,
     PerceptionConfig,
     PolicyConfig,
+    ProviderEntry,
     ProvidersConfig,
     ThrottlerConfig,
     default_config_path,
@@ -190,3 +191,45 @@ def test_save_config_writes_header_comment(tmp_path):
     # Body must be valid YAML that round-trips through pydantic
     parsed = yaml.safe_load(body)
     assert parsed["version"] == 1
+
+
+def test_providers_config_defaults_to_gemini_via_litellm():
+    cfg = AndroidHarnessConfig()
+    p = cfg.providers
+    assert p.use_litellm is True
+    assert p.default == "gemini"
+    assert "gemini" in p.entries
+    assert p.entries["gemini"].api_key_env == "GEMINI_API_KEY"
+    assert p.entries["gemini"].default_model.startswith("gemini/")
+
+
+def test_providers_config_rejects_unknown_default_provider():
+    with pytest.raises(ValueError):  # raised by model_post_init
+        ProvidersConfig(default="not-a-provider", entries={"gemini": ProviderEntry(
+            api_key_env="GEMINI_API_KEY", default_model="gemini/gemini-2.5-flash",
+        )})
+
+
+def test_providers_config_rejects_unknown_field():
+    """extra='forbid' must still hold on the new fields."""
+    with pytest.raises(ValidationError):
+        ProvidersConfig(use_litellm=True, default="gemini", entries={}, junk=1)
+
+
+def test_providers_entry_loads_from_yaml_round_trip(tmp_path):
+    yaml_text = """\
+version: 1
+providers:
+  use_litellm: false
+  default: anthropic
+  entries:
+    anthropic:
+      api_key_env: ANTHROPIC_API_KEY
+      default_model: anthropic/claude-haiku-4-5
+"""
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml_text)
+    cfg = load_config(p)
+    assert cfg.providers.use_litellm is False
+    assert cfg.providers.default == "anthropic"
+    assert cfg.providers.entries["anthropic"].default_model == "anthropic/claude-haiku-4-5"
