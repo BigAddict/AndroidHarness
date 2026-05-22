@@ -1,0 +1,56 @@
+<section class="panel">
+  <h2>Policy</h2>
+  {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
+
+  {% set modes = ['auto', 'confirm', 'dry-run', 'deny'] %}
+  {% set tools = [
+    'tap', 'long_press', 'type', 'swipe', 'scroll',
+    'press_key', 'wait', 'show_screen',
+    'open_notifications', 'close_notifications', 'done',
+  ] %}
+
+  <form hx-patch="/config/policy" hx-target="#panel" hx-swap="innerHTML">
+    <div class="field">
+      <label for="default_mode">Default mode (applies to any tool not listed below)</label>
+      <select id="default_mode" name="default_mode">
+        {% set current = overrides.get('default_mode', cfg.policy.default_mode) %}
+        {% for m in modes %}
+          <option value="{{ m }}" {% if m == current %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('default_mode') %}<span class="err">{{ errors['default_mode'] }}</span>{% endif %}
+    </div>
+
+    <div class="field">
+      <label for="confirm_timeout_s">Confirm timeout (seconds — auto-rejects on expiry)</label>
+      <input id="confirm_timeout_s" name="confirm_timeout_s" type="number" min="1"
+             value="{{ overrides.get('confirm_timeout_s', cfg.policy.confirm_timeout_s) }}">
+      {% if errors.get('confirm_timeout_s') %}<span class="err">{{ errors['confirm_timeout_s'] }}</span>{% endif %}
+    </div>
+
+    <h3 style="margin-top: 24px;">Per-tool override</h3>
+    <table>
+      <thead><tr><th>Tool</th><th>Mode</th></tr></thead>
+      <tbody>
+        {% for t in tools %}
+          {% set tool_key = 'per_tool.' ~ t %}
+          {% set current = overrides.get(tool_key, cfg.policy.per_tool.get(t, '')) %}
+          <tr>
+            <td><code>{{ t }}</code></td>
+            <td>
+              <select name="{{ tool_key }}">
+                <option value="" {% if not current %}selected{% endif %}>— use default —</option>
+                {% for m in modes %}
+                  <option value="{{ m }}" {% if m == current %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              </select>
+              {% if errors.get(tool_key) %}<span class="err">{{ errors[tool_key] }}</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <button type="submit" style="margin-top: 16px;">Save</button>
+  </form>
+</section>

@@ -178,6 +178,23 @@ def register_routes(app: FastAPI) -> None:
                 request, "devices", ["defaults"],
                 {"device_serial": submitted.get("device_serial") or None},
             )
+        if section == "policy":
+            # per_tool: drop empty-string entries (they mean "use default").
+            # Pass the whole new section so _apply_section_and_write replaces
+            # per_tool wholesale rather than merging into the existing dict.
+            cleaned_per_tool = {
+                t: m for t, m in submitted.get("per_tool", {}).items() if m
+            }
+            new_section = {
+                "default_mode": submitted.get("default_mode"),
+                "confirm_timeout_s": submitted.get("confirm_timeout_s"),
+                "per_tool": cleaned_per_tool,
+            }
+            # Drop None entries so Pydantic defaults apply where the form left fields blank.
+            new_section = {k: v for k, v in new_section.items() if v is not None}
+            return _apply_section_and_write(
+                request, "policy", ["policy"], new_section,
+            )
 
         raise HTTPException(status_code=405, detail=f"PATCH not yet wired for {section}")
 
