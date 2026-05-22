@@ -165,7 +165,13 @@ GEMINI_FUNCTION_DECLARATIONS: list[dict[str, Any]] = [
     },
     {
         "name": "type",
-        "description": "Focus an editable node and type text. Set replace=true to clear first.",
+        "description": (
+            "Focus an editable node and type text. Default behavior APPENDS to "
+            "whatever is already in the field. Set replace=true to clear the "
+            "field first and write `text` as the only content. For long bodies "
+            "(notes, messages, paragraphs), prefer ONE type call carrying the "
+            "full text — chunking across many turns is slower and brittle."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {

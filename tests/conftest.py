@@ -15,6 +15,9 @@ class FakeDevice:
     hierarchy_xml: str = "<hierarchy rotation='0'></hierarchy>"
     screenshot_bytes: bytes = b"PNGFAKE"
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    # Models the focused field's content so tests can assert append vs replace
+    # semantics. Mirrors UIAutomatorDevice.type_text behavior.
+    focused_text: str = ""
 
     def dump_hierarchy(self) -> str:
         self.calls.append(("dump_hierarchy", {}))
@@ -32,6 +35,10 @@ class FakeDevice:
 
     def type_text(self, x: int, y: int, text: str, replace: bool) -> None:
         self.calls.append(("type_text", {"x": x, "y": y, "text": text, "replace": replace}))
+        if replace:
+            self.focused_text = text
+        else:
+            self.focused_text = self.focused_text + text
 
     def swipe(self, direction: str, distance: str) -> None:
         self.calls.append(("swipe", {"direction": direction, "distance": distance}))

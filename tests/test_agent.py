@@ -359,3 +359,39 @@ def test_agent_confirm_approved_lets_call_through_to_device(fake_device, fake_ge
     )
     agent.run("type some text")
     assert any(c[0] == "type_text" for c in fake_device.calls)
+
+
+def test_agent_type_with_replace_false_appends_into_focused_field(fake_device, fake_gemini):
+    """Regression: the user issued a multi-paragraph notes task and the agent
+    burned 30 turns chunking text into a body field. Every `type` call was
+    silently wiping the field because the device implementation called
+    set_text() unconditionally, ignoring the replace flag. Multiple type
+    calls with replace=False must concatenate, not overwrite."""
+    fake_device.hierarchy_xml = HIERARCHY
+    client = fake_gemini(
+        [
+            {"name": "type", "args": {"id": 1, "text": "Hello "}},
+            {"name": "type", "args": {"id": 1, "text": "world!"}},
+            {"name": "done", "args": {"success": True, "reason": "appended"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    agent.run("write hello world in two type calls")
+
+    assert fake_device.focused_text == "Hello world!"
+
+
+def test_agent_type_with_replace_true_overwrites_focused_field(fake_device, fake_gemini):
+    """The escape hatch: replace=True clears prior content first."""
+    fake_device.hierarchy_xml = HIERARCHY
+    fake_device.focused_text = "pre-existing junk"
+    client = fake_gemini(
+        [
+            {"name": "type", "args": {"id": 1, "text": "fresh text", "replace": True}},
+            {"name": "done", "args": {"success": True, "reason": "replaced"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    agent.run("overwrite the field")
+
+    assert fake_device.focused_text == "fresh text"

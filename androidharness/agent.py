@@ -54,6 +54,10 @@ Rules:
   * If a previous tool returned a NO_PROGRESS warning, do NOT repeat the same call.
     Switch tactics: call show_screen() if the tree is unclear, pick a different element,
     swap scroll for swipe (or vice versa), or press_key('back') to escape.
+  * To write a long body of text (a note, a message, a paragraph): send ONE type() call
+    with the full content. Chunking across multiple type() calls wastes turns and the
+    field's observable text may lag, making it hard to track what's already there. Use
+    replace=true when you want to rewrite a field; default behavior appends.
   * When the task is complete (or definitively impossible), call done(success, reason).
   * Prefer the smallest sequence of actions that achieves the task."""
 

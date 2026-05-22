@@ -43,11 +43,13 @@ Focus an editable field and type text.
 |-----|------|----------|-------|
 | `id` | integer | yes | Should be an `editable` node |
 | `text` | string | yes | Text to type |
-| `replace` | boolean | no | If `true`, clears the field before typing |
+| `replace` | boolean | no | `false` (default) appends to the field; `true` clears the field first |
 
-The implementation taps the node center to focus it, optionally calls `device.clear_text()`, then sends the text via uiautomator2's FastInputIME. The user's original IME is restored afterward.
+The implementation taps the node to focus it, then writes via the focused node's `set_text` through uiautomator2's accessibility API (no IME swap, no shell-out). For `replace=false`, the device reads the existing text and concatenates — so multiple `type` calls genuinely build up content.
 
-**When the model uses it:** search boxes, text fields, form inputs.
+**Write long bodies in one call.** Chunking a paragraph across many `type` turns wastes the agent's turn budget and the field's observable text often lags, making it hard for the model to track what's already there. Prefer sending the whole body as a single `type` call.
+
+**When the model uses it:** search boxes, text fields, form inputs, notes.
 
 ---
 

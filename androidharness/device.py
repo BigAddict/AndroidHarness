@@ -96,11 +96,19 @@ class UIAutomatorDevice:
         # commonly fails on lock screens / secure windows — the user's prior
         # incident chain. set_text writes directly through the focused
         # AccessibilityNode; no IME swap, no shell-out to adb.
+        #
+        # set_text always overwrites the field's full content, so to honor
+        # the `replace=False` (append) contract we have to read the existing
+        # text and concatenate ourselves. Otherwise an agent issuing several
+        # `type` calls to build up a long body sees each call silently wipe
+        # the field.
         self._d.click(x, y)
         focused = self._d(focused=True)
         if replace:
-            focused.clear_text()
-        focused.set_text(text)
+            focused.set_text(text)
+        else:
+            existing = focused.get_text() or ""
+            focused.set_text(existing + text)
 
     def swipe(self, direction: str, distance: str) -> None:
         w, h = self._d.window_size()
