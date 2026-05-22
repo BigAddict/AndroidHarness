@@ -361,5 +361,61 @@ def run_cmd(
     sys.exit(0 if outcome.success else 1)
 
 
+# Set of pip-package names provided by the [web] optional extra.
+# Used to tell "missing extra" apart from a real bug in androidharness/web/.
+_WEB_EXTRA_PACKAGES = {
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "multipart",  # python-multipart imports as `multipart`
+    "pydantic_settings",
+}
+
+
+@app.command("serve")
+def serve_cmd(
+    port: int = typer.Option(8000, "--port", "-p", help="Port to bind."),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Host to bind. Leave on 127.0.0.1 (no auth)."
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help=(
+            "Path to config.yaml. Defaults to $ANDROIDHARNESS_CONFIG"
+            " or ~/.androidharness/config.yaml."
+        ),
+    ),
+) -> None:
+    """Run the Settings UI (browser-based config editor)."""
+    try:
+        from androidharness.web.app import create_app
+    except ModuleNotFoundError as e:
+        if e.name in _WEB_EXTRA_PACKAGES:
+            typer.echo(
+                "the `serve` command needs the optional [web] extra:\n"
+                "    uv add 'androidharness[web]'\n"
+                "    # or: pip install 'androidharness[web]'"
+            )
+            raise typer.Exit(code=1) from e
+        raise
+
+    try:
+        import uvicorn
+    except ModuleNotFoundError as e:
+        typer.echo(
+            "the `serve` command needs the optional [web] extra (uvicorn missing):\n"
+            "    uv add 'androidharness[web]'"
+        )
+        raise typer.Exit(code=1) from e
+
+    config_path = _resolve_config_path(config)
+    app_obj = create_app(config_path)
+    typer.echo(f"AndroidHarness Settings UI — editing {config_path}")
+    typer.echo(f"open: http://{host}:{port}/")
+    uvicorn.run(app_obj, host=host, port=port, log_level="info")
+
+
 if __name__ == "__main__":
     app()
