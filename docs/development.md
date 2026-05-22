@@ -61,6 +61,8 @@ Constructor fields:
 - `model` — defaults to `"FakePixel"`
 - `hierarchy_xml` — the XML returned by `dump_hierarchy()`
 - `screenshot_bytes` — the bytes returned by `screenshot()`
+- `focused_text` — current contents of the focused field; mutated by `type_text` (append when `replace=False`, overwrite when `replace=True`)
+- `focused_max_length` — optional `maxLength` cap on the focused field; when set, `type_text` truncates and then raises `TypeFieldMismatchError` to match the real device's behavior (Android's silent-truncate-with-toast)
 
 ### `FakeGeminiClient`
 

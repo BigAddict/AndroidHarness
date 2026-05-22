@@ -54,7 +54,7 @@ Two things:
 2. `UIAutomatorDevice` (`device.py:68`) — the real implementation backed by `uiautomator2`. Connects with `UIAutomatorDevice.connect(serial)`.
 
 Notable details:
-- `type_text` captures and restores the device's IME after typing so it does not leave FastInputIME active (`device.py:96`).
+- `type_text` writes through the focused node's accessibility `set_text` — no IME swap, no shell-out. `replace=False` reads the field first and concatenates so multiple calls genuinely append. After every write the device reads the field back and raises `TypeFieldMismatchError` if it disagrees with what was requested (typical cause: `maxLength` constraint with an Android toast — toasts float above the accessibility tree and are invisible to `dump_hierarchy`, so the model otherwise can't perceive the truncation). The agent's exception shield turns this into an `ok=False` `tool_result` with the field's real end-state.
 - `swipe` and `scroll` both use `uiautomator2`'s `swipe` primitive under the hood; `scroll` centers the gesture on the resolved node (`device.py:147`).
 - `open_notifications` / `close_notifications` use `adb shell cmd statusbar expand-notifications|collapse` (Android 9+, no root required).
 - `list_devices()` runs `adb devices` and resolves model names via `getprop ro.product.model`.
