@@ -31,7 +31,7 @@ export GEMINI_API_KEY=...
 uv run androidharness run "Open Settings and show the About Phone screen"
 ```
 
-The CLI prints the run directory, final status, and exits 0 on success, 1 on failure.
+The CLI streams the agent's progress to stderr in real time — every turn, every tool call, every policy decision — so you can watch the run unfold. The final summary (run directory, status, exit code) is written to stdout once the run completes, which keeps the structured output clean if you pipe it.
 
 ```
 logs: logs/androidharness.log

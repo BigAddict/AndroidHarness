@@ -137,4 +137,4 @@ The agent loop (`agent.py`) wraps the `tools.execute(...)` call in a closure and
 
 ### `androidharness/logging_setup.py`
 
-`setup_file_logging(logs_dir)` — attaches a `RotatingFileHandler` to the `androidharness` logger. Max 10 MB per file, 5 backup files (~60 MB ceiling). Idempotent — safe to call multiple times in the same process.
+`setup_logging(logs_dir)` — attaches a `RotatingFileHandler` (max 10 MB per file, 5 backups, ~60 MB ceiling) AND a `StreamHandler(sys.stderr)` to the `androidharness` logger. The file is the durable record; stderr is the live feed the terminal user watches while a run is in progress. The structured stdout summary (run dir / status / success / reason / turns) stays uncluttered. Idempotent — safe to call multiple times in the same process. A back-compat `setup_file_logging` alias exists for now.

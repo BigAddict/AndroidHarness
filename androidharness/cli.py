@@ -16,7 +16,7 @@ from androidharness.config import (
 )
 from androidharness.device import UIAutomatorDevice, list_devices
 from androidharness.llm import GoogleGenaiClient, LiteLLMClient, LiteLLMRouterClient
-from androidharness.logging_setup import setup_file_logging
+from androidharness.logging_setup import setup_logging
 from androidharness.runner import run_task
 
 app = typer.Typer(add_completion=False, help="AI harness for Android devices.")
@@ -158,7 +158,7 @@ def run_cmd(
     runs_dir = runs_dir if runs_dir is not None else Path(d.runs_dir)
     logs_dir = logs_dir if logs_dir is not None else Path(d.logs_dir)
 
-    log_path = setup_file_logging(logs_dir)
+    log_path = setup_logging(logs_dir)
     typer.echo(f"logs: {log_path}", err=True)
 
     if serial and device_index is not None:

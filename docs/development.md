@@ -142,7 +142,7 @@ androidharness/
   device.py        Device protocol + UIAutomatorDevice
   runner.py        run_task() — artifact I/O
   imaging.py       quantize_png()
-  logging_setup.py setup_file_logging()
+  logging_setup.py setup_logging() — file + stderr stream
 tests/
   conftest.py      FakeDevice, FakeGeminiClient fixtures
   test_*.py        unit + integration tests
