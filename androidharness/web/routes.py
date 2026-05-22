@@ -161,6 +161,27 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail=f"unknown section: {section}")
         form = await request.form()
 
+        # Models is special-cased before unflatten: chain entries contain '/'
+        # (e.g. 'gemini/gemini-2.5-flash') which unflatten would split as nested keys.
+        if section == "models":
+            raw_form = {k: str(v) for k, v in form.items()}
+            names = [n for n in raw_form.get("logical_names", "").split(",") if n]
+            logical_models: dict[str, list[str]] = {}
+            for name in names:
+                raw_chain = raw_form.get(f"chain.{name}", "")
+                chain = [e.strip() for e in raw_chain.split(",") if e.strip()]
+                logical_models[name] = chain
+            new_name = raw_form.get("new_logical_name", "").strip()
+            new_chain_raw = raw_form.get("new_chain", "").strip()
+            if new_name and new_chain_raw:
+                logical_models[new_name] = [
+                    e.strip() for e in new_chain_raw.split(",") if e.strip()
+                ]
+            return _apply_section_and_write(
+                request, "models", ["providers"],
+                {"logical_models": logical_models},
+            )
+
         # Throttler is special-cased before unflatten: bucket keys contain '/'
         # which dotted-path splitting would misinterpret as nested structure.
         if section == "throttler":

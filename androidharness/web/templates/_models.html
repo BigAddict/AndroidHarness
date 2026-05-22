@@ -1,0 +1,40 @@
+<section class="panel">
+  <h2>Logical models</h2>
+  {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
+  <p class="placeholder">
+    Logical names (e.g. <code>fast</code>, <code>smart</code>, <code>cheap</code>) map to ordered
+    fallback chains of <code>provider/model</code> entries. The throttler tries each entry in order
+    on rate-limit errors.
+  </p>
+
+  <form hx-patch="/config/models" hx-target="#panel" hx-swap="innerHTML">
+    {% set names = cfg.providers.logical_models.keys() | list %}
+    <input type="hidden" name="logical_names" value="{{ names|join(',') }}">
+
+    <table>
+      <thead><tr><th>Name</th><th>Fallback chain (comma-separated)</th></tr></thead>
+      <tbody>
+        {% for name in names %}
+          {% set chain_key = 'chain.' ~ name %}
+          {% set current_chain = overrides.get(chain_key, cfg.providers.logical_models[name]|join(', ')) %}
+          <tr>
+            <td><code>{{ name }}</code></td>
+            <td>
+              <input name="{{ chain_key }}" value="{{ current_chain }}" style="min-width: 420px;">
+              {% if errors.get(chain_key) or errors.get('providers.logical_models.' ~ name) %}
+                <span class="err">{{ errors.get(chain_key) or errors.get('providers.logical_models.' ~ name) }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        {# One blank row to add a new logical model #}
+        <tr>
+          <td><input name="new_logical_name" placeholder="name (e.g. smart)"></td>
+          <td><input name="new_chain" placeholder="anthropic/claude-haiku-4-5, openai/gpt-4o-mini" style="min-width: 420px;"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <button type="submit" style="margin-top: 16px;">Save</button>
+  </form>
+</section>
