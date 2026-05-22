@@ -1,5 +1,63 @@
 <section class="panel">
   <h2>Providers</h2>
   {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
-  <p class="placeholder">Provider editing lands in the Providers panel task.</p>
+
+  <form hx-patch="/config/providers" hx-target="#panel" hx-swap="innerHTML">
+    <div class="field">
+      <label for="default">Default provider</label>
+      <select id="default" name="default">
+        {% set current_default = overrides.get('default', cfg.providers.default) %}
+        {% for name in cfg.providers.entries.keys() %}
+          <option value="{{ name }}" {% if name == current_default %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('providers.default') %}<span class="err">{{ errors['providers.default'] }}</span>{% endif %}
+    </div>
+
+    <div class="field">
+      <label>
+        <input type="checkbox" name="use_litellm" value="true"
+               {% if overrides.get('use_litellm') == 'true' or (overrides.get('use_litellm') is none and cfg.providers.use_litellm) %}checked{% endif %}>
+        Use LiteLLM (uncheck to fall back to v1 GoogleGenaiClient)
+      </label>
+    </div>
+
+    <h3 style="margin-top: 24px;">Entries</h3>
+    <input type="hidden" name="provider_keys" value="{{ cfg.providers.entries.keys()|join(',') }}">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>api_key_env</th><th>default_model</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for name, entry in cfg.providers.entries.items() %}
+          <tr>
+            <td><code>{{ name }}</code></td>
+            <td>
+              <input name="entries.{{ name }}.api_key_env"
+                     value="{{ overrides.get('entries.' ~ name ~ '.api_key_env', entry.api_key_env) }}">
+              {% if errors.get('providers.entries.' ~ name ~ '.api_key_env') %}
+                <span class="err">{{ errors['providers.entries.' ~ name ~ '.api_key_env'] }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <input name="entries.{{ name }}.default_model"
+                     value="{{ overrides.get('entries.' ~ name ~ '.default_model', entry.default_model) }}">
+              {% if errors.get('providers.entries.' ~ name ~ '.default_model') %}
+                <span class="err">{{ errors['providers.entries.' ~ name ~ '.default_model'] }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if secrets_set.get(name) %}
+                <span class="badge badge-set">&#10003; set</span>
+              {% else %}
+                <span class="badge badge-missing">&#10007; missing</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <button type="submit" style="margin-top: 16px;">Save</button>
+  </form>
 </section>

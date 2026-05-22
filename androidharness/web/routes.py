@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from androidharness.config import AndroidHarnessConfig
 from androidharness.web.devices import list_adb_devices
 from androidharness.web.forms import FormError, unflatten
+from androidharness.web.secrets import ProviderSecrets
 
 # Allowlist of panel names. Each entry maps the URL name → template partial.
 PANELS: dict[str, str] = {
@@ -44,6 +45,11 @@ def _render_panel(
     extra: dict = {}
     if name == "devices":
         extra["devices"] = list_adb_devices()
+    if name == "providers":
+        extra["secrets_set"] = {
+            entry_name: ProviderSecrets.is_set(entry.api_key_env)
+            for entry_name, entry in cfg.providers.entries.items()
+        }
     return templates.TemplateResponse(
         request,
         PANELS[name],
@@ -139,13 +145,25 @@ def register_routes(app: FastAPI) -> None:
 
     @app.get("/")
     def index(request: Request):
+        store = request.app.state.store
+        cfg = store.load()
+        secrets_set = {
+            entry_name: ProviderSecrets.is_set(entry.api_key_env)
+            for entry_name, entry in cfg.providers.entries.items()
+        }
         return templates.TemplateResponse(
             request,
             "index.html",
             {
-                "cfg": request.app.state.store.load(),
+                "cfg": cfg,
                 "panels": list(PANELS.keys()),
                 "active": "providers",
+                "panel": "providers",
+                "banner": None,
+                "banner_kind": "ok",
+                "errors": {},
+                "overrides": {},
+                "secrets_set": secrets_set,
             },
         )
 
@@ -180,6 +198,26 @@ def register_routes(app: FastAPI) -> None:
             return _apply_section_and_write(
                 request, "models", ["providers"],
                 {"logical_models": logical_models},
+            )
+
+        # Providers is special-cased before unflatten: entries.<name>.api_key_env
+        # contains dots that unflatten would interpret as nested keys.
+        if section == "providers":
+            raw_form = {k: str(v) for k, v in form.items()}
+            provider_keys = [k for k in raw_form.get("provider_keys", "").split(",") if k]
+            entries: dict[str, dict] = {}
+            for name in provider_keys:
+                entries[name] = {
+                    "api_key_env": raw_form.get(f"entries.{name}.api_key_env", ""),
+                    "default_model": raw_form.get(f"entries.{name}.default_model", ""),
+                }
+            new_section: dict = {
+                "default": raw_form.get("default", ""),
+                "use_litellm": raw_form.get("use_litellm") == "true",
+                "entries": entries,
+            }
+            return _apply_section_and_write(
+                request, "providers", ["providers"], new_section,
             )
 
         # Throttler is special-cased before unflatten: bucket keys contain '/'
