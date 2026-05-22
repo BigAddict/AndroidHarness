@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AndroidHarness — Settings</title>
+<link rel="stylesheet" href="/static/styles.css">
+<!-- htmx: integrity hash omitted; verify against CDN at smoke-test time -->
+<script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+</head>
+<body>
+<aside class="sidebar">
+  <h1>AndroidHarness</h1>
+  <nav>
+    {% for p in panels %}
+      <a href="/" hx-get="/panel/{{ p }}" hx-target="#panel" hx-swap="innerHTML"
+         class="nav-link {% if p == active %}active{% endif %}">
+        {{ p|capitalize }}
+      </a>
+    {% endfor %}
+  </nav>
+</aside>
+<main id="panel">
+  {% block panel %}{% endblock %}
+</main>
+</body>
+</html>
