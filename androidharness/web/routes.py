@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import ValidationError
 
 from androidharness.config import AndroidHarnessConfig
+from androidharness.web.devices import list_adb_devices
 from androidharness.web.forms import FormError, unflatten
 
 # Allowlist of panel names. Each entry maps the URL name → template partial.
@@ -40,6 +41,9 @@ def _render_panel(
     templates = request.app.state.templates
     store = request.app.state.store
     cfg = store.load()
+    extra: dict = {}
+    if name == "devices":
+        extra["devices"] = list_adb_devices()
     return templates.TemplateResponse(
         request,
         PANELS[name],
@@ -50,6 +54,7 @@ def _render_panel(
             "banner_kind": banner_kind,
             "errors": errors or {},
             "overrides": overrides or {},
+            **extra,
         },
     )
 
@@ -168,6 +173,11 @@ def register_routes(app: FastAPI) -> None:
             return _apply_section_and_write(request, "general", ["defaults"], submitted)
         if section == "logging":
             return _apply_section_and_write(request, "logging", ["logging"], submitted)
+        if section == "devices":
+            return _apply_section_and_write(
+                request, "devices", ["defaults"],
+                {"device_serial": submitted.get("device_serial") or None},
+            )
 
         raise HTTPException(status_code=405, detail=f"PATCH not yet wired for {section}")
 
