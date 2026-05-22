@@ -281,7 +281,7 @@ def register_routes(app: FastAPI) -> None:
                 request, "policy", ["policy"], new_section,
             )
 
-        raise HTTPException(status_code=405, detail=f"PATCH not yet wired for {section}")
+        raise AssertionError(f"unreachable: PANELS section {section!r} missing PATCH arm")
 
 
 __all__ = ["register_routes", "PANELS"]
