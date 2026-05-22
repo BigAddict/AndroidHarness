@@ -52,6 +52,16 @@ class ProseRenderer:
             traits.append("scrollable")
         if n.editable:
             traits.append("editable")
+        # State traits — only surface when non-default so they cost zero
+        # bytes on the typical screen but pop visibly when they matter.
+        if not n.enabled:
+            traits.append("disabled")
+        if n.focused:
+            traits.append("focused")
+        if n.checked:
+            traits.append("checked")
+        if n.password:
+            traits.append("password")
         traits_str = f" ({', '.join(traits)})" if traits else ""
 
         label_source = n.text or n.content_desc

@@ -20,6 +20,16 @@ class Node:
     long_clickable: bool
     scrollable: bool
     editable: bool
+    # State flags from the XML the agent needs to be able to see:
+    #   * enabled=False — control is greyed out, taps will not fire.
+    #   * focused=True — this is where the keyboard / next type() lands.
+    #   * checked=True — switches / radios / checkboxes in the on state.
+    #   * password=True — secure input; the policy layer can gate on it.
+    # All four default to "normal" so existing fixtures stay valid.
+    enabled: bool = True
+    focused: bool = False
+    checked: bool = False
+    password: bool = False
 
     @property
     def short_class(self) -> str:
@@ -223,6 +233,11 @@ def parse_hierarchy(xml: str, *, viewport_filter: bool = False) -> Observation:
             long_clickable=_attr_bool(elem, "long-clickable"),
             scrollable=_attr_bool(elem, "scrollable"),
             editable=editable,
+            # `enabled` defaults to True in the XML when absent — same here.
+            enabled=elem.get("enabled", "true") != "false",
+            focused=_attr_bool(elem, "focused"),
+            checked=_attr_bool(elem, "checked"),
+            password=_attr_bool(elem, "password"),
         )
         obs.nodes.append(node)
         next_id += 1

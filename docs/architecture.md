@@ -66,7 +66,7 @@ Notable details:
 Converts the raw uiautomator2 XML hierarchy into a typed `Observation` of `Node` dataclasses. Pure parse + filter — no rendering, no text output.
 
 Key types:
-- `Node` — immutable dataclass for one UI node. Attributes: `id`, `class_name`, `text`, `content_desc`, `resource_id`, `bounds`, `clickable`, `long_clickable`, `scrollable`, `editable`. Computed: `center`, `short_class`. `format()` and `summary` are back-compat shims that delegate to `render.DEFAULT_RENDERER`.
+- `Node` — immutable dataclass for one UI node. Attributes: `id`, `class_name`, `text`, `content_desc`, `resource_id`, `bounds`, `clickable`, `long_clickable`, `scrollable`, `editable`, plus state flags `enabled` (default True), `focused`, `checked`, `password` (default False). Computed: `center`, `short_class`. `format()` and `summary` are back-compat shims that delegate to `render.DEFAULT_RENDERER`.
 - `Observation` — holds the node list for one turn. `resolve(id)` returns the node or raises `KeyError`. `render()` is a back-compat shim that delegates to `render.DEFAULT_RENDERER.observation(...)`.
 
 `parse_hierarchy(xml, viewport_filter=False)` does the work:

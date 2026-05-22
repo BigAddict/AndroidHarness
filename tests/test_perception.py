@@ -230,3 +230,35 @@ def test_short_resource_id_handles_missing_slash():
 """
     obs = parse_hierarchy(xml)
     assert obs.nodes[0].format(with_resource_id=True) == '[1] Button "X" #plain_id (clickable)'
+
+
+def test_parse_captures_enabled_focused_checked_password_state():
+    """All four state attributes round-trip from XML through parse_hierarchy
+    into the Node so the renderer (and policy layer) can act on them."""
+    xml = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[0,0][200,100]" class="android.widget.Button" text="Submit" clickable="true" enabled="false"/>
+    <node bounds="[0,100][200,200]" class="android.widget.EditText" text="hi" focusable="true" focused="true"/>
+    <node bounds="[0,200][200,300]" class="android.widget.Switch" text="Wi-Fi" clickable="true" checkable="true" checked="true"/>
+    <node bounds="[0,300][200,400]" class="android.widget.EditText" content-desc="Password" focusable="true" password="true"/>
+  </node>
+</hierarchy>
+"""
+    from androidharness.perception import parse_hierarchy
+
+    obs = parse_hierarchy(xml)
+    by_text = {n.text or n.content_desc: n for n in obs.nodes}
+
+    assert by_text["Submit"].enabled is False
+    assert by_text["hi"].focused is True
+    assert by_text["Wi-Fi"].checked is True
+    assert by_text["Password"].password is True
+
+    # The other state fields default to their "normal" values.
+    assert by_text["Submit"].focused is False
+    assert by_text["Submit"].checked is False
+    assert by_text["Submit"].password is False
+    assert by_text["hi"].enabled is True
+    assert by_text["Wi-Fi"].enabled is True
+    assert by_text["Password"].enabled is True

@@ -117,3 +117,63 @@ def test_renderer_protocol_accepts_a_custom_implementation():
     assert r.node(n) == "1:Button:Settings"
     obs = Observation(nodes=[n, _node(id=2, text="Wi-Fi")])
     assert r.observation(obs) == "1:Button:Settings\n2:Button:Wi-Fi"
+
+
+def test_prose_renderer_disabled_button_gets_disabled_trait():
+    r = ProseRenderer()
+    n = Node(
+        id=1, class_name="android.widget.Button", text="Submit", content_desc="",
+        resource_id="", bounds=(0, 0, 100, 100), clickable=True,
+        long_clickable=False, scrollable=False, editable=False,
+        enabled=False,
+    )
+    assert r.node(n) == '[1] Button "Submit" (clickable, disabled)'
+
+
+def test_prose_renderer_focused_editable_gets_focused_trait():
+    """The agent needs this to disambiguate which field will receive the
+    next type() call. The body-vs-title focus failure last week was hard
+    to debug precisely because focus wasn't visible in the Observation."""
+    r = ProseRenderer()
+    n = Node(
+        id=1, class_name="android.widget.EditText", text="hello", content_desc="",
+        resource_id="", bounds=(0, 0, 100, 100), clickable=False,
+        long_clickable=False, scrollable=False, editable=True,
+        focused=True,
+    )
+    assert r.node(n) == '[1] EditText "hello" (editable, focused)'
+
+
+def test_prose_renderer_checked_toggle_gets_checked_trait():
+    r = ProseRenderer()
+    n = Node(
+        id=1, class_name="android.widget.Switch", text="Wi-Fi", content_desc="",
+        resource_id="", bounds=(0, 0, 100, 100), clickable=True,
+        long_clickable=False, scrollable=False, editable=False,
+        checked=True,
+    )
+    assert r.node(n) == '[1] Switch "Wi-Fi" (clickable, checked)'
+
+
+def test_prose_renderer_password_field_gets_password_trait():
+    """The policy layer can read this from the rendered Observation (or the
+    Node directly) to gate type() into secure fields."""
+    r = ProseRenderer()
+    n = Node(
+        id=1, class_name="android.widget.EditText", text="", content_desc="Password",
+        resource_id="", bounds=(0, 0, 100, 100), clickable=False,
+        long_clickable=False, scrollable=False, editable=True,
+        password=True,
+    )
+    assert r.node(n) == '[1] EditText placeholder="Password" (editable, password)'
+
+
+def test_prose_renderer_state_traits_default_to_normal_for_old_fixtures():
+    """The four state fields all have safe defaults so existing test
+    fixtures (which don't set them) render byte-for-byte identically."""
+    r = ProseRenderer()
+    n = _node(text="Settings")
+    # No disabled / focused / checked / password trait surfaces.
+    rendered = r.node(n)
+    for tag in ("disabled", "focused", "checked", "password"):
+        assert tag not in rendered

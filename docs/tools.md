@@ -4,6 +4,8 @@ These are the functions exposed to the LLM on every turn via `GEMINI_FUNCTION_DE
 
 All `id` arguments refer to node ids from the **current turn's** Observation. Ids are not stable across turns — using an id from a previous turn will produce a structured error rather than a crash.
 
+Each node's traits in the Observation surface its current state: `clickable`, `long-clickable`, `scrollable`, `editable` (interactivity), plus `disabled` (greyed out — taps won't fire), `focused` (the field the next `type` will land in), `checked` (toggle / radio / switch in the on state), and `password` (secure input — the policy layer can gate on this). Absence means the default: enabled, unfocused, unchecked, plain.
+
 Every tool call passes through the **policy gate** (`androidharness/policy.py`) before reaching the device — `auto` flows through, `confirm` blocks on an interactive `[y/N]` prompt, `dry-run` returns ok=True without touching the device, `deny` returns ok=False. See [configuration.md](configuration.md#policy) for how to set per-tool modes. Defaults out of the box: `type` and `long_press` require confirmation; everything else is `auto`.
 
 ---
