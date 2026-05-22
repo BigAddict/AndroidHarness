@@ -160,6 +160,32 @@ def register_routes(app: FastAPI) -> None:
         if section not in PANELS:
             raise HTTPException(status_code=404, detail=f"unknown section: {section}")
         form = await request.form()
+
+        # Throttler is special-cased before unflatten: bucket keys contain '/'
+        # which dotted-path splitting would misinterpret as nested structure.
+        if section == "throttler":
+            raw_form = {k: str(v) for k, v in form.items()}
+            enabled = raw_form.get("enabled") == "true"
+            bucket_keys = [k for k in raw_form.get("bucket_keys", "").split(",") if k]
+            buckets: dict[str, dict] = {}
+            for key in bucket_keys:
+                rpm_raw = raw_form.get(f"bucket.{key}.rpm", "")
+                tpm_raw = raw_form.get(f"bucket.{key}.tpm", "")
+                bucket: dict = {}
+                if rpm_raw:
+                    bucket["rpm"] = rpm_raw
+                if tpm_raw:
+                    bucket["tpm"] = tpm_raw
+                buckets[key] = bucket
+            new_section: dict = {
+                "enabled": enabled,
+                "cooldown_seconds": raw_form.get("cooldown_seconds"),
+                "num_retries": raw_form.get("num_retries"),
+                "buckets": buckets,
+            }
+            new_section = {k: v for k, v in new_section.items() if v is not None}
+            return _apply_section_and_write(request, "throttler", ["throttler"], new_section)
+
         try:
             submitted = unflatten({k: str(v) for k, v in form.items()})
         except FormError as e:

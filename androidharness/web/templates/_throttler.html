@@ -1,0 +1,48 @@
+<section class="panel">
+  <h2>Throttler</h2>
+  {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
+
+  <form hx-patch="/config/throttler" hx-target="#panel" hx-swap="innerHTML">
+    <div class="field">
+      <label>
+        <input type="checkbox" name="enabled" value="true"
+               {% if (overrides.get('enabled') or cfg.throttler.enabled) %}checked{% endif %}>
+        Enabled (routes calls through litellm.Router for rate limiting + fallback)
+      </label>
+    </div>
+
+    <div class="field">
+      <label for="cooldown_seconds">Cooldown after a rate-limit (seconds)</label>
+      <input id="cooldown_seconds" name="cooldown_seconds" type="number" min="1"
+             value="{{ overrides.get('cooldown_seconds', cfg.throttler.cooldown_seconds) }}">
+      {% if errors.get('cooldown_seconds') %}<span class="err">{{ errors['cooldown_seconds'] }}</span>{% endif %}
+    </div>
+
+    <div class="field">
+      <label for="num_retries">Retries before giving up</label>
+      <input id="num_retries" name="num_retries" type="number" min="0"
+             value="{{ overrides.get('num_retries', cfg.throttler.num_retries) }}">
+      {% if errors.get('num_retries') %}<span class="err">{{ errors['num_retries'] }}</span>{% endif %}
+    </div>
+
+    <h3 style="margin-top: 24px;">Buckets</h3>
+    <table>
+      <thead><tr><th>provider/model</th><th>RPM</th><th>TPM</th></tr></thead>
+      <tbody>
+        {% set keys = cfg.throttler.buckets.keys() | list %}
+        <input type="hidden" name="bucket_keys" value="{{ keys|join(',') }}">
+        {% for key in keys %}
+          {% set b = cfg.throttler.buckets[key] %}
+          <tr>
+            <td><code>{{ key }}</code></td>
+            <td><input name="bucket.{{ key }}.rpm" type="number" min="1" value="{{ b.rpm or '' }}"></td>
+            <td><input name="bucket.{{ key }}.tpm" type="number" min="1" value="{{ b.tpm or '' }}"></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="placeholder">Add new buckets by editing config.yaml directly for now; this panel edits existing entries.</p>
+
+    <button type="submit" style="margin-top: 16px;">Save</button>
+  </form>
+</section>
