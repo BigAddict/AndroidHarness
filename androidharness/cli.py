@@ -17,6 +17,8 @@ from androidharness.config import (
 from androidharness.device import UIAutomatorDevice, list_devices
 from androidharness.llm import GoogleGenaiClient, LiteLLMClient, LiteLLMRouterClient
 from androidharness.logging_setup import setup_logging
+from androidharness.perception import parse_hierarchy
+from androidharness.render import DEFAULT_RENDERER
 from androidharness.runner import run_task
 
 app = typer.Typer(add_completion=False, help="AI harness for Android devices.")
@@ -118,6 +120,98 @@ def devices_cmd() -> None:
         raise typer.Exit(code=1)
     for i, info in enumerate(infos):
         typer.echo(f"[{i}] {info.serial}  {info.model}")
+
+
+def _select_device_serial(serial, device_index, cfg, infos) -> str:
+    """Resolve which device serial to use, matching `run`'s precedence:
+    explicit --serial > --device-index > cfg.defaults.device_serial > sole
+    connected device > error. Aborts the CLI on any ambiguity."""
+    if serial and device_index is not None:
+        typer.echo("error: --serial and --device-index are mutually exclusive", err=True)
+        raise typer.Exit(code=2)
+    if serial:
+        if serial not in {i.serial for i in infos}:
+            typer.echo(f"serial {serial!r} not in connected devices", err=True)
+            raise typer.Exit(code=1)
+        return serial
+    if device_index is not None:
+        if not 0 <= device_index < len(infos):
+            typer.echo(f"--device-index out of range: {device_index}", err=True)
+            raise typer.Exit(code=1)
+        return infos[device_index].serial
+    if cfg.defaults.device_serial is not None:
+        if cfg.defaults.device_serial in {i.serial for i in infos}:
+            return cfg.defaults.device_serial
+    if len(infos) == 1:
+        return infos[0].serial
+    typer.echo("multiple devices — pass --serial or --device-index:", err=True)
+    for i, info in enumerate(infos):
+        typer.echo(f"  [{i}] {info.serial}  {info.model}", err=True)
+    raise typer.Exit(code=1)
+
+
+@app.command("peek")
+def peek_cmd(
+    serial: str | None = typer.Option(None, "--serial", "-s"),
+    device_index: int | None = typer.Option(None, "--device-index", "-i"),
+    viewport_filter: bool | None = typer.Option(
+        None,
+        "--viewport-filter/--no-viewport-filter",
+        help="Drop off-screen / visibility=gone nodes. Default: cfg.perception.viewport_filter.",
+    ),
+    with_resource_ids: bool | None = typer.Option(
+        None,
+        "--with-resource-ids/--no-resource-ids",
+        help="Append the resource-id to each node. Default: cfg.perception.resource_id_in_render.",
+    ),
+    raw_xml: bool = typer.Option(
+        False,
+        "--raw-xml",
+        help="Print the raw uiautomator2 XML instead of the rendered Observation.",
+    ),
+    config_path: Path | None = typer.Option(None, "--config", help="Override the config path."),
+) -> None:
+    """Dump what the model would see on the connected device right now.
+
+    Read-only: connects, dumps_hierarchy, parses, renders, prints. No LLM is
+    called, no tool fires, the device state is not changed. Useful for
+    debugging perception filters and previewing screens before pointing the
+    agent at them.
+    """
+    try:
+        cfg = load_config(config_path)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(code=1) from e
+
+    vf = viewport_filter if viewport_filter is not None else cfg.perception.viewport_filter
+    rids = (
+        with_resource_ids
+        if with_resource_ids is not None
+        else cfg.perception.resource_id_in_render
+    )
+
+    infos = list_devices()
+    if not infos:
+        typer.echo("no devices connected (check 'adb devices')", err=True)
+        raise typer.Exit(code=1)
+    chosen = _select_device_serial(serial, device_index, cfg, infos)
+
+    device = UIAutomatorDevice.connect(chosen)
+    xml = device.dump_hierarchy()
+    if raw_xml:
+        typer.echo(xml, nl=False)
+        return
+
+    obs = parse_hierarchy(xml, viewport_filter=vf)
+    rendered = DEFAULT_RENDERER.observation(obs, with_resource_id=rids)
+    # Header goes to stderr so the rendered body on stdout stays pipeable.
+    typer.echo(
+        f"# {len(obs.nodes)} nodes (viewport_filter={vf}, resource_ids={rids}, "
+        f"~{len(rendered)} chars)",
+        err=True,
+    )
+    typer.echo(rendered)
 
 
 @app.command("run")

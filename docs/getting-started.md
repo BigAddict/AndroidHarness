@@ -68,6 +68,19 @@ Passing both flags is an error. With a single device attached, no flag is needed
 
 All defaults come from the config file; CLI flags override them for a single run.
 
+## Previewing the screen the agent will see
+
+`androidharness peek` is a read-only window into the perception layer — it dumps the connected device's current screen exactly the way the agent would observe it, without invoking the LLM, firing a tool, or changing device state.
+
+```bash
+uv run androidharness peek                    # default-rendered Observation
+uv run androidharness peek --raw-xml          # the unprocessed uiautomator2 XML
+uv run androidharness peek --with-resource-ids
+uv run androidharness peek --viewport-filter  # drop off-screen / gone nodes (override config)
+```
+
+Use it before a `run` to confirm the screen is in the state you expect, or to debug why the agent is misidentifying a node — what you see in `peek` is byte-for-byte what the model sees.
+
 ## Logical model names and the throttler
 
 If you've set up logical model names in your config, pass them as `--model`:
