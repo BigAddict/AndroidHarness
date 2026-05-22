@@ -31,36 +31,12 @@ class Node:
         return ((x1 + x2) // 2, (y1 + y2) // 2)
 
     def format(self, *, with_resource_id: bool = False) -> str:
-        traits: list[str] = []
-        # Editable (EditText) subsumes clickable — don't double-list it
-        if self.clickable and not self.editable:
-            traits.append("clickable")
-        if self.long_clickable:
-            traits.append("long-clickable")
-        if self.scrollable:
-            traits.append("scrollable")
-        if self.editable:
-            traits.append("editable")
-        traits_str = f" ({', '.join(traits)})" if traits else ""
+        # Delegate to the rendering module. Rendering is intentionally
+        # decoupled so we can experiment with denser formats (TOON, columnar)
+        # without touching perception.
+        from androidharness.render import DEFAULT_RENDERER
 
-        label_source = self.text or self.content_desc
-        if self.editable and not self.text:
-            label = f'placeholder="{self.content_desc}"' if self.content_desc else "(empty)"
-        elif label_source:
-            label = f'"{label_source}"'
-        else:
-            label = ""
-
-        parts = [f"[{self.id}]", self.short_class]
-        if label:
-            parts.append(label)
-
-        if with_resource_id and self.resource_id:
-            rid = self.resource_id
-            short = rid.rsplit("/", 1)[-1] if "/" in rid else rid
-            parts.append(f"#{short}")
-
-        return (" ".join(parts) + traits_str).rstrip()
+        return DEFAULT_RENDERER.node(self, with_resource_id=with_resource_id)
 
     @property
     def summary(self) -> str:
@@ -78,7 +54,9 @@ class Observation:
         raise KeyError(node_id)
 
     def render(self, *, with_resource_ids: bool = False) -> str:
-        return "\n".join(n.format(with_resource_id=with_resource_ids) for n in self.nodes)
+        from androidharness.render import DEFAULT_RENDERER
+
+        return DEFAULT_RENDERER.observation(self, with_resource_id=with_resource_ids)
 
 
 def _parse_bounds(raw: str) -> tuple[int, int, int, int]:

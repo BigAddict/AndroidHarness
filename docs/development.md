@@ -141,6 +141,7 @@ androidharness/
   llm.py           LLMClient Protocol + LiteLLMClient + GoogleGenaiClient
   tools.py         execute() + GEMINI_FUNCTION_DECLARATIONS
   perception.py    XML → Observation (Node list)
+  render.py        Observation → text (Renderer Protocol + ProseRenderer)
   device.py        Device protocol + UIAutomatorDevice
   runner.py        run_task() — artifact I/O
   imaging.py       quantize_png()

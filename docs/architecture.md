@@ -6,7 +6,8 @@
 CLI (cli.py)
   └── run_task (runner.py)
         ├── Agent (agent.py)
-        │     ├── parse_hierarchy (perception.py)   ← reads UI tree each turn
+        │     ├── parse_hierarchy (perception.py)   ← XML → typed Observation
+        │     ├── Renderer (render.py)               ← Observation → text the LLM sees
         │     ├── LLMClient (llm.py)                 ← Protocol; LiteLLMClient / LiteLLMRouterClient / GoogleGenaiClient
         │     ├── Policy (policy.py)                 ← auto / confirm / dry-run / deny gate
         │     └── execute (tools.py)                 ← dispatches tool calls to device
@@ -61,11 +62,11 @@ Notable details:
 
 ### `androidharness/perception.py`
 
-Converts the raw uiautomator2 XML hierarchy into a compact numbered list of nodes that fits in an LLM prompt.
+Converts the raw uiautomator2 XML hierarchy into a typed `Observation` of `Node` dataclasses. Pure parse + filter — no rendering, no text output.
 
 Key types:
-- `Node` (`perception.py:11`) — immutable dataclass for one UI node. Attributes: `id`, `class_name`, `text`, `content_desc`, `resource_id`, `bounds`, `clickable`, `long_clickable`, `scrollable`, `editable`. Computed: `center`, `short_class`, `summary`.
-- `Observation` (`perception.py:61`) — holds the node list for one turn. `resolve(id)` returns the node or raises `KeyError`. `render()` returns the newline-joined text sent to the model.
+- `Node` — immutable dataclass for one UI node. Attributes: `id`, `class_name`, `text`, `content_desc`, `resource_id`, `bounds`, `clickable`, `long_clickable`, `scrollable`, `editable`. Computed: `center`, `short_class`. `format()` and `summary` are back-compat shims that delegate to `render.DEFAULT_RENDERER`.
+- `Observation` — holds the node list for one turn. `resolve(id)` returns the node or raises `KeyError`. `render()` is a back-compat shim that delegates to `render.DEFAULT_RENDERER.observation(...)`.
 
 `parse_hierarchy(xml, viewport_filter=False)` does the work:
 - Keeps nodes that are interactable (clickable, long-clickable, scrollable, editable) or have non-empty text/content-desc.
@@ -73,6 +74,16 @@ Key types:
 - Assigns sequential integer ids starting at 1 — ids are turn-local, not stable across turns.
 - When an interactable node has no own label, it absorbs text from non-interactable descendants (`_collect_descendant_text`).
 - With `viewport_filter=True`, drops nodes with degenerate bounds, `visibility="gone"`, or bounds fully outside the screen rect derived from the top-level window node.
+
+### `androidharness/render.py`
+
+The seam between the typed perception layer and the text the LLM actually sees. Lets us experiment with denser formats (TOON, YAML-columnar, JSON-lines, …) without touching perception logic.
+
+- `Renderer` Protocol — `node(n, with_resource_id)` and `observation(obs, with_resource_id)` return strings. Pure functions of the Observation; no I/O.
+- `ProseRenderer` — the v1 format. Each node is one line: `[id] ClassName "label" #resource_id (traits)`. Resource-id and traits are optional.
+- `DEFAULT_RENDERER = ProseRenderer()` — the singleton every caller resolves through. Replace via DI on the agent when benchmarking alternatives.
+
+Ship a new renderer only after a fixture-driven benchmark proves both a token-count win **and** no tool-call accuracy regression on the existing test set (per v2 spec §7 step 4).
 
 ### `androidharness/agent.py`
 
