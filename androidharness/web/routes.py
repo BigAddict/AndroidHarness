@@ -166,6 +166,8 @@ def register_routes(app: FastAPI) -> None:
         if section == "general":
             # All fields land directly on cfg.defaults (device_serial is owned by Devices).
             return _apply_section_and_write(request, "general", ["defaults"], submitted)
+        if section == "logging":
+            return _apply_section_and_write(request, "logging", ["logging"], submitted)
 
         raise HTTPException(status_code=405, detail=f"PATCH not yet wired for {section}")
 

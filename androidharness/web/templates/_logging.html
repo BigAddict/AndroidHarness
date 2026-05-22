@@ -1,0 +1,23 @@
+<section class="panel">
+  <h2>Logging</h2>
+  {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
+  <form hx-patch="/config/logging" hx-target="#panel" hx-swap="innerHTML">
+    <div class="field">
+      <label for="level">Log level</label>
+      <select id="level" name="level">
+        {% set current_level = overrides.get('level', cfg.logging.level) %}
+        {% for lvl in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
+          <option value="{{ lvl }}" {% if lvl == current_level %}selected{% endif %}>{{ lvl }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('level') %}<span class="err">{{ errors['level'] }}</span>{% endif %}
+    </div>
+    <div class="field">
+      <label for="rotation_mb">Rotation size (MB per file)</label>
+      <input id="rotation_mb" name="rotation_mb" type="number" min="1"
+             value="{{ overrides.get('rotation_mb', cfg.logging.rotation_mb) }}">
+      {% if errors.get('rotation_mb') %}<span class="err">{{ errors['rotation_mb'] }}</span>{% endif %}
+    </div>
+    <button type="submit">Save</button>
+  </form>
+</section>
