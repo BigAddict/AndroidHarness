@@ -1,0 +1,34 @@
+<section class="panel">
+  <h2>General defaults</h2>
+  {% if banner %}<div class="banner banner-{{ banner_kind }}">{{ banner }}</div>{% endif %}
+  <form hx-patch="/config/general" hx-target="#panel" hx-swap="innerHTML">
+    <div class="field">
+      <label for="model">Default model</label>
+      <input id="model" name="model" value="{{ overrides.get('model', cfg.defaults.model) }}">
+      {% if errors.get('model') %}<span class="err">{{ errors['model'] }}</span>{% endif %}
+    </div>
+    <div class="field">
+      <label for="max_turns">Max turns per run</label>
+      <input id="max_turns" name="max_turns" type="number" min="1"
+             value="{{ overrides.get('max_turns', cfg.defaults.max_turns) }}">
+      {% if errors.get('max_turns') %}<span class="err">{{ errors['max_turns'] }}</span>{% endif %}
+    </div>
+    <div class="field">
+      <label for="wall_clock_s">Wall-clock cap (seconds)</label>
+      <input id="wall_clock_s" name="wall_clock_s" type="number" step="any" min="0.001"
+             value="{{ overrides.get('wall_clock_s', cfg.defaults.wall_clock_s) }}">
+      {% if errors.get('wall_clock_s') %}<span class="err">{{ errors['wall_clock_s'] }}</span>{% endif %}
+    </div>
+    <div class="field">
+      <label for="runs_dir">Runs directory</label>
+      <input id="runs_dir" name="runs_dir" value="{{ overrides.get('runs_dir', cfg.defaults.runs_dir) }}">
+      {% if errors.get('runs_dir') %}<span class="err">{{ errors['runs_dir'] }}</span>{% endif %}
+    </div>
+    <div class="field">
+      <label for="logs_dir">Logs directory</label>
+      <input id="logs_dir" name="logs_dir" value="{{ overrides.get('logs_dir', cfg.defaults.logs_dir) }}">
+      {% if errors.get('logs_dir') %}<span class="err">{{ errors['logs_dir'] }}</span>{% endif %}
+    </div>
+    <button type="submit">Save</button>
+  </form>
+</section>
