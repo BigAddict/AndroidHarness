@@ -1,5 +1,14 @@
 # Configuration
 
+## Editing the config
+
+Two ways:
+
+* **Settings UI:** `uv run androidharness serve` (requires the `[web]` extra), then open <http://127.0.0.1:8000>. Inline validation, atomic writes; runs started after the save pick up the new values.
+* **Direct YAML:** edit `~/.androidharness/config.yaml` (or `$ANDROIDHARNESS_CONFIG`). Runs read config at start, so re-run after editing.
+
+The Settings UI and the CLI both write the same file. API keys are referenced by env-var name only — the UI never reads or stores the key itself.
+
 ## Config file location
 
 Default: `~/.androidharness/config.yaml`

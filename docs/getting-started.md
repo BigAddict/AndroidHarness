@@ -81,6 +81,19 @@ uv run androidharness peek --viewport-filter  # drop off-screen / gone nodes (ov
 
 Use it before a `run` to confirm the screen is in the state you expect, or to debug why the agent is misidentifying a node — what you see in `peek` is byte-for-byte what the model sees.
 
+## Settings UI (optional)
+
+Install the web extra and run the editor:
+
+```bash
+uv add 'androidharness[web]'
+uv run androidharness serve
+```
+
+…then open <http://127.0.0.1:8000>. The UI binds to localhost only — no auth, no network exposure. It edits the same `~/.androidharness/config.yaml` the CLI reads, so flips made in the browser apply to subsequent `androidharness run` invocations. API keys are referenced by env-var name only; the UI never sees the key itself.
+
+Panels: Providers, Models (logical fallback chains), Throttler, Policy, Devices, Logging, General.
+
 ## Logical model names and the throttler
 
 If you've set up logical model names in your config, pass them as `--model`:

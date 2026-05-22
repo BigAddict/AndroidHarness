@@ -150,3 +150,7 @@ The agent loop (`agent.py`) wraps the `tools.execute(...)` call in a closure and
 ### `androidharness/logging_setup.py`
 
 `setup_logging(logs_dir)` — attaches a `RotatingFileHandler` (max 10 MB per file, 5 backups, ~60 MB ceiling) AND a `StreamHandler(sys.stderr)` to the `androidharness` logger. The file is the durable record; stderr is the live feed the terminal user watches while a run is in progress. The structured stdout summary (run dir / status / success / reason / turns) stays uncluttered. Idempotent — safe to call multiple times in the same process. A back-compat `setup_file_logging` alias exists for now.
+
+### `androidharness/web/`
+
+Settings UI subpackage (v2 milestone 5). FastAPI app behind a lazy import from `cli.py serve`, so the `[web]` extra (`fastapi`, `jinja2`, `uvicorn`, `python-multipart`, `pydantic-settings`) stays optional. `web/store.py` does atomic load/write of `config.yaml`; `web/routes.py` registers one `GET /panel/<name>` + `PATCH /config/<section>` per panel (providers, models, throttler, policy, devices, logging, general); `web/secrets.py` exposes `ProviderSecrets.is_set(env_var_name)` for the env-presence badges. Form bodies use dotted keys (`policy.per_tool.tap`) that `web/forms.py:unflatten` converts to nested dicts before Pydantic validation. The throttler / models / providers handlers consume the raw form directly because their keys contain `/`. Validation runs the full `AndroidHarnessConfig` end-to-end so cross-section invariants (e.g. `providers.default in providers.entries`) are caught before writing.
