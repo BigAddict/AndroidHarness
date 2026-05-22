@@ -395,3 +395,34 @@ def test_agent_type_with_replace_true_overwrites_focused_field(fake_device, fake
     agent.run("overwrite the field")
 
     assert fake_device.focused_text == "fresh text"
+
+
+def test_agent_type_into_maxlength_field_surfaces_toast_invisible_truncation(
+    fake_device, fake_gemini
+):
+    """Regression: a notes task where the title field had a maxLength.
+    Android shows a toast on truncation; the toast floats above the
+    accessibility tree, so dump_hierarchy doesn't see it. The model kept
+    retrying with longer text, never learning why the field wouldn't grow.
+
+    After this fix, the type tool returns ok=False with a clear message
+    naming the truncation, the actual end-state, and likely causes."""
+    fake_device.hierarchy_xml = HIERARCHY
+    fake_device.focused_max_length = 5  # tiny title field
+    client = fake_gemini(
+        [
+            {"name": "type", "args": {"id": 1, "text": "this is way too long"}},
+            {"name": "done", "args": {"success": False, "reason": "title truncated"}},
+        ]
+    )
+    agent = Agent(device=fake_device, client=client, model="gemini-2.5-flash", max_turns=10)
+    result = agent.run("type the title")
+
+    # The field accepted only the first 5 chars.
+    assert fake_device.focused_text == "this "
+    # The model saw a tool_result with ok=False and a helpful message.
+    tr = result.turn_log[0]["tool_result"]
+    assert tr["ok"] is False
+    assert "maxLength" in tr["message"] or "toast" in tr["message"].lower()
+    # The actual end-state is in the message so the model can adapt.
+    assert "5" in tr["message"]  # the truncated length

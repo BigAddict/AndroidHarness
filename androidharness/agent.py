@@ -58,6 +58,11 @@ Rules:
     with the full content. Chunking across multiple type() calls wastes turns and the
     field's observable text may lag, making it hard to track what's already there. Use
     replace=true when you want to rewrite a field; default behavior appends.
+  * If type() returns ok=False with a message about maxLength or a toast, the field
+    silently truncated the input — Android toasts float above the accessibility tree,
+    so the Observation can never show them. The message contains the field's actual
+    end-state. Adapt: shorten the text, switch to a different field, or accept the
+    truncated value. Do NOT retry the same long input expecting a different result.
   * When the task is complete (or definitively impossible), call done(success, reason).
   * Prefer the smallest sequence of actions that achieves the task."""
 

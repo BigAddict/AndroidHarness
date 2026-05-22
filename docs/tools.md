@@ -49,6 +49,8 @@ The implementation taps the node to focus it, then writes via the focused node's
 
 **Write long bodies in one call.** Chunking a paragraph across many `type` turns wastes the agent's turn budget and the field's observable text often lags, making it hard for the model to track what's already there. Prefer sending the whole body as a single `type` call.
 
+**Read-back verification.** After writing, the device reads the field's text and compares to what was sent. If they disagree — typically a `maxLength` constraint + an Android toast (toasts float above the accessibility tree and are invisible to `dump_hierarchy`), focus moved between the tap and the type, or the field is read-only — the tool returns `ok=False` with a message that names the field's actual end-state and the likely cause. The model gets a real explanation instead of silently retrying.
+
 **When the model uses it:** search boxes, text fields, form inputs, notes.
 
 ---

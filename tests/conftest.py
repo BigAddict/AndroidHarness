@@ -18,6 +18,9 @@ class FakeDevice:
     # Models the focused field's content so tests can assert append vs replace
     # semantics. Mirrors UIAutomatorDevice.type_text behavior.
     focused_text: str = ""
+    # Optional maxLength constraint to simulate Android's silent-truncation +
+    # toast behavior. None = unlimited.
+    focused_max_length: int | None = None
 
     def dump_hierarchy(self) -> str:
         self.calls.append(("dump_hierarchy", {}))
@@ -34,11 +37,23 @@ class FakeDevice:
         self.calls.append(("long_press", {"x": x, "y": y, "duration_ms": duration_ms}))
 
     def type_text(self, x: int, y: int, text: str, replace: bool) -> None:
+        from androidharness.device import TypeFieldMismatchError
+
         self.calls.append(("type_text", {"x": x, "y": y, "text": text, "replace": replace}))
-        if replace:
-            self.focused_text = text
+        expected = text if replace else self.focused_text + text
+        if self.focused_max_length is not None:
+            self.focused_text = expected[: self.focused_max_length]
         else:
-            self.focused_text = self.focused_text + text
+            self.focused_text = expected
+        if self.focused_text != expected:
+            raise TypeFieldMismatchError(
+                f"requested {len(expected)} chars but field now has "
+                f"{len(self.focused_text)} ({self.focused_text!r}). Possible "
+                "causes: maxLength (Android typically shows a toast on "
+                "truncation — the model cannot see toasts), focus moved "
+                "between tap and type, field is read-only / filtered / "
+                "auto-corrected."
+            )
 
     def swipe(self, direction: str, distance: str) -> None:
         self.calls.append(("swipe", {"direction": direction, "distance": distance}))

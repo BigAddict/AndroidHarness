@@ -8,6 +8,20 @@ from typing import Protocol
 import uiautomator2 as u2
 
 
+class TypeFieldMismatchError(RuntimeError):
+    """Raised when type_text's read-back disagrees with what was requested.
+
+    Common causes the model otherwise can't perceive:
+      * maxLength constraint with a toast (toasts float above the
+        accessibility tree, so dump_hierarchy does not see them).
+      * Focus moved between the tap and the set_text — the bytes landed in
+        a different field, or no field at all.
+      * Field is read-only, filtered (digits-only), or auto-corrected.
+
+    The message includes the actual end-state so the agent can adapt.
+    """
+
+
 class Device(Protocol):
     serial: str
     model: str
@@ -102,13 +116,27 @@ class UIAutomatorDevice:
         # text and concatenate ourselves. Otherwise an agent issuing several
         # `type` calls to build up a long body sees each call silently wipe
         # the field.
+        #
+        # We always read the field back afterwards: if the field has a
+        # maxLength constraint (Android's typical response is a toast that
+        # is invisible to the accessibility tree), or focus moved between
+        # the tap and the set_text, the model needs to see that the bytes
+        # didn't land. Without this readback, the agent retries forever.
         self._d.click(x, y)
         focused = self._d(focused=True)
-        if replace:
-            focused.set_text(text)
-        else:
-            existing = focused.get_text() or ""
-            focused.set_text(existing + text)
+        existing = "" if replace else (focused.get_text() or "")
+        expected = text if replace else (existing + text)
+        focused.set_text(expected)
+        actual = focused.get_text() or ""
+        if actual != expected:
+            preview = actual if len(actual) <= 200 else actual[:200] + "…"
+            raise TypeFieldMismatchError(
+                f"requested {len(expected)} chars but field now has "
+                f"{len(actual)} ({preview!r}). Possible causes: maxLength "
+                "(Android typically shows a toast on truncation — the "
+                "model cannot see toasts), focus moved between tap and "
+                "type, field is read-only / filtered / auto-corrected."
+            )
 
     def swipe(self, direction: str, distance: str) -> None:
         w, h = self._d.window_size()
