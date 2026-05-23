@@ -132,6 +132,7 @@ class Agent:
     quantize_screenshots: bool = False
     viewport_filter: bool = False
     resource_id_in_render: bool = False
+    sibling_collapse: bool = False
     policy: Policy = field(default_factory=Policy)
     # AlwaysRejectConfirmer: fail-closed default. If a caller enables `confirm`
     # mode without injecting a real confirmer, the call is rejected rather than
@@ -178,7 +179,10 @@ class Agent:
             obs = parse_hierarchy(xml, viewport_filter=self.viewport_filter)
             obs_payload: dict[str, Any] = {
                 "role": "observation",
-                "text": obs.render(with_resource_ids=self.resource_id_in_render),
+                "text": obs.render(
+                    with_resource_ids=self.resource_id_in_render,
+                    sibling_collapse=self.sibling_collapse,
+                ),
             }
             if screenshot_bytes is not None:
                 obs_payload["screenshot"] = screenshot_bytes
@@ -188,7 +192,10 @@ class Agent:
             contents.append(obs_payload)
             _log.info("turn %d: observation has %d nodes", turn_idx, len(obs.nodes))
 
-            if _is_stalled(turn_log, obs.render()):
+            if _is_stalled(turn_log, obs.render(
+                with_resource_ids=self.resource_id_in_render,
+                sibling_collapse=self.sibling_collapse,
+            )):
                 last = turn_log[-1]["tool_call"]
                 warning = (
                     f"NO_PROGRESS: the last {_NO_PROGRESS_WINDOW} turns all called "
@@ -241,7 +248,10 @@ class Agent:
             turn_log.append(
                 {
                     "turn": turn_idx,
-                    "observation_summary": obs.render(),
+                    "observation_summary": obs.render(
+                        with_resource_ids=self.resource_id_in_render,
+                        sibling_collapse=self.sibling_collapse,
+                    ),
                     "observation_payload": dict(obs_payload),  # shallow copy; runner may mutate
                     "tool_call": {"name": call.name, "args": call.args},
                     "tool_result": tool_result_payload,

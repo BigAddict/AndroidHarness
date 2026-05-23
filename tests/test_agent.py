@@ -426,3 +426,52 @@ def test_agent_type_into_maxlength_field_surfaces_toast_invisible_truncation(
     assert "maxLength" in tr["message"] or "toast" in tr["message"].lower()
     # The actual end-state is in the message so the model can adapt.
     assert "5" in tr["message"]  # the truncated length
+
+
+def test_agent_passes_sibling_collapse_to_renderer():
+    """When Agent.sibling_collapse=True, the rendered observation the agent
+    sends in `contents` is collapsed."""
+    from androidharness.agent import Agent
+    from androidharness.policy import AlwaysApproveConfirmer, Policy
+
+    # Three ImageView nodes — should collapse to one line.
+    collapsible_xml = (
+        "<?xml version='1.0'?>"
+        "<hierarchy>"
+        "  <node bounds='[0,0][1000,1000]'>"
+        "    <node class='android.widget.ImageView' bounds='[0,0][10,10]' clickable='true'/>"
+        "    <node class='android.widget.ImageView' bounds='[10,0][20,10]' clickable='true'/>"
+        "    <node class='android.widget.ImageView' bounds='[20,0][30,10]' clickable='true'/>"
+        "  </node>"
+        "</hierarchy>"
+    )
+
+    class _FakeDevice:
+        serial = "fake"
+        model = "fake"
+        def dump_hierarchy(self) -> str:
+            return collapsible_xml
+        def screenshot(self) -> bytes:
+            return b""
+
+    captured: list[str] = []
+
+    class _CapturingClient:
+        def generate(self, *, model, system_instruction, contents, tools):
+            for c in contents:
+                if c.get("role") == "observation":
+                    captured.append(c["text"])
+            return {"name": "done", "args": {"success": True, "reason": "ok"}}
+
+    agent = Agent(
+        device=_FakeDevice(),
+        client=_CapturingClient(),
+        model="fake",
+        max_turns=1,
+        sibling_collapse=True,
+        policy=Policy(),
+        confirmer=AlwaysApproveConfirmer(),
+    )
+    agent.run("test")
+    assert captured, "agent never sent an observation"
+    assert "× 3" in captured[0], f"expected collapsed render, got: {captured[0]!r}"
