@@ -37,6 +37,7 @@ class Renderer(Protocol):
         *,
         with_resource_id: bool = False,
         sibling_collapse: bool = False,
+        foreground_package: bool = False,
     ) -> str: ...
 
 
@@ -96,43 +97,48 @@ class ProseRenderer:
         *,
         with_resource_id: bool = False,
         sibling_collapse: bool = False,
+        foreground_package: bool = False,
     ) -> str:
         if not sibling_collapse:
-            return "\n".join(
+            body = "\n".join(
                 self.node(n, with_resource_id=with_resource_id) for n in obs.nodes
             )
+        else:
+            lines: list[str] = []
+            nodes = obs.nodes
+            i = 0
+            n = len(nodes)
+            while i < n:
+                run_end = i + 1
+                head = nodes[i]
+                # A node is collapsible only if it has no distinguishing label.
+                if not head.text and not head.content_desc:
+                    while run_end < n:
+                        cur = nodes[run_end]
+                        if (
+                            cur.class_name == head.class_name
+                            and cur.resource_id == head.resource_id
+                            and not cur.text
+                            and not cur.content_desc
+                        ):
+                            run_end += 1
+                        else:
+                            break
+                run_len = run_end - i
+                if run_len >= 3:
+                    parts = [f"[{head.id}]", head.short_class, f"× {run_len}"]
+                    if with_resource_id and head.resource_id:
+                        parts.append(f"#{self._short_resource_id(head.resource_id)}")
+                    lines.append(" ".join(parts))
+                    i = run_end
+                else:
+                    lines.append(self.node(head, with_resource_id=with_resource_id))
+                    i += 1
+            body = "\n".join(lines)
 
-        lines: list[str] = []
-        nodes = obs.nodes
-        i = 0
-        n = len(nodes)
-        while i < n:
-            run_end = i + 1
-            head = nodes[i]
-            # A node is collapsible only if it has no distinguishing label.
-            if not head.text and not head.content_desc:
-                while run_end < n:
-                    cur = nodes[run_end]
-                    if (
-                        cur.class_name == head.class_name
-                        and cur.resource_id == head.resource_id
-                        and not cur.text
-                        and not cur.content_desc
-                    ):
-                        run_end += 1
-                    else:
-                        break
-            run_len = run_end - i
-            if run_len >= 3:
-                parts = [f"[{head.id}]", head.short_class, f"× {run_len}"]
-                if with_resource_id and head.resource_id:
-                    parts.append(f"#{self._short_resource_id(head.resource_id)}")
-                lines.append(" ".join(parts))
-                i = run_end
-            else:
-                lines.append(self.node(head, with_resource_id=with_resource_id))
-                i += 1
-        return "\n".join(lines)
+        if foreground_package and obs.foreground_package:
+            return f"# foreground: {obs.foreground_package}\n{body}"
+        return body
 
 
 # The agent and every test rely on this concrete default. Replace via DI

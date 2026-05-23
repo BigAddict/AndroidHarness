@@ -109,7 +109,7 @@ def test_renderer_protocol_accepts_a_custom_implementation():
             tag = f"#{n.resource_id.rsplit('/', 1)[-1]}" if with_resource_id and n.resource_id else ""
             return f"{n.id}:{n.short_class}:{label}{tag}"
 
-        def observation(self, obs: Observation, *, with_resource_id: bool = False, sibling_collapse: bool = False) -> str:
+        def observation(self, obs: Observation, *, with_resource_id: bool = False, sibling_collapse: bool = False, foreground_package: bool = False) -> str:
             return "\n".join(self.node(n, with_resource_id=with_resource_id) for n in obs.nodes)
 
     r: Renderer = CompactRenderer()
@@ -275,3 +275,46 @@ def test_sibling_collapse_run_at_end_of_list():
     ])
     rendered = r.observation(obs, sibling_collapse=True)
     assert rendered == '[1] TextView "Header"\n[2] ImageView × 3'
+
+
+def test_foreground_package_header_prepends_when_enabled():
+    r = ProseRenderer()
+    obs = Observation(
+        nodes=[_node(id=1, cls="android.widget.Button", text="Buy", content_desc="", clickable=True)],
+        foreground_package="com.binance.dev",
+    )
+    rendered = r.observation(obs, foreground_package=True)
+    assert rendered == '# foreground: com.binance.dev\n[1] Button "Buy" (clickable)'
+
+
+def test_foreground_package_header_omitted_when_disabled():
+    """Default behavior: no header, byte-identical to pre-M22 output."""
+    r = ProseRenderer()
+    obs = Observation(
+        nodes=[_node(id=1, cls="android.widget.Button", text="Buy", content_desc="", clickable=True)],
+        foreground_package="com.binance.dev",
+    )
+    rendered = r.observation(obs)
+    assert rendered == '[1] Button "Buy" (clickable)'
+
+
+def test_foreground_package_header_omitted_when_field_empty():
+    """Flag on but field empty → no stray header line."""
+    r = ProseRenderer()
+    obs = Observation(
+        nodes=[_node(id=1, cls="android.widget.Button", text="Buy", content_desc="", clickable=True)],
+        foreground_package="",
+    )
+    rendered = r.observation(obs, foreground_package=True)
+    assert rendered == '[1] Button "Buy" (clickable)'
+
+
+def test_foreground_package_combines_with_sibling_collapse():
+    """Header followed by collapsed body."""
+    r = ProseRenderer()
+    obs = Observation(
+        nodes=[_imgview(1), _imgview(2), _imgview(3)],
+        foreground_package="com.binance.dev",
+    )
+    rendered = r.observation(obs, foreground_package=True, sibling_collapse=True)
+    assert rendered == "# foreground: com.binance.dev\n[1] ImageView × 3"
