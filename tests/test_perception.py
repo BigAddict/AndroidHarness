@@ -330,3 +330,23 @@ def test_parse_hierarchy_foreground_package_empty_when_attr_missing():
     )
     obs = parse_hierarchy(xml)
     assert obs.foreground_package == ""
+
+
+def test_observation_render_threads_foreground_package():
+    """Observation.render(foreground_package=True) prepends the header from
+    the field on the Observation."""
+    from androidharness.perception import Node, Observation
+
+    obs = Observation(
+        nodes=[
+            Node(
+                id=1, class_name="android.widget.Button",
+                text="Buy", content_desc="", resource_id="",
+                bounds=(0, 0, 10, 10),
+                clickable=True, long_clickable=False, scrollable=False, editable=False,
+            )
+        ],
+        foreground_package="com.binance.dev",
+    )
+    rendered = obs.render(foreground_package=True)
+    assert rendered.startswith("# foreground: com.binance.dev\n")

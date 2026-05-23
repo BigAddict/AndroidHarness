@@ -69,6 +69,7 @@ class Observation:
         *,
         with_resource_ids: bool = False,
         sibling_collapse: bool = False,
+        foreground_package: bool = False,
     ) -> str:
         from androidharness.render import DEFAULT_RENDERER
 
@@ -76,6 +77,7 @@ class Observation:
             self,
             with_resource_id=with_resource_ids,
             sibling_collapse=sibling_collapse,
+            foreground_package=foreground_package,
         )
 
 
