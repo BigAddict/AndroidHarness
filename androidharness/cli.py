@@ -169,6 +169,11 @@ def peek_cmd(
         "--sibling-collapse/--no-sibling-collapse",
         help="Collapse runs of N≥3 identical sibling nodes. Default: cfg.perception.sibling_collapse.",  # noqa: E501
     ),
+    foreground_package: bool | None = typer.Option(
+        None,
+        "--foreground-package/--no-foreground-package",
+        help="Prepend `# foreground: <package>` header. Default: cfg.perception.foreground_package.",  # noqa: E501
+    ),
     raw_xml: bool = typer.Option(
         False,
         "--raw-xml",
@@ -200,6 +205,11 @@ def peek_cmd(
         if sibling_collapse is not None
         else cfg.perception.sibling_collapse
     )
+    fp = (
+        foreground_package
+        if foreground_package is not None
+        else cfg.perception.foreground_package
+    )
 
     infos = list_devices()
     if not infos:
@@ -214,11 +224,13 @@ def peek_cmd(
         return
 
     obs = parse_hierarchy(xml, viewport_filter=vf)
-    rendered = DEFAULT_RENDERER.observation(obs, with_resource_id=rids, sibling_collapse=sc)
+    rendered = DEFAULT_RENDERER.observation(
+        obs, with_resource_id=rids, sibling_collapse=sc, foreground_package=fp
+    )
     # Header goes to stderr so the rendered body on stdout stays pipeable.
     typer.echo(
         f"# {len(obs.nodes)} nodes (viewport_filter={vf}, resource_ids={rids}, "
-        f"sibling_collapse={sc}, ~{len(rendered)} chars)",
+        f"sibling_collapse={sc}, foreground_package={fp}, ~{len(rendered)} chars)",
         err=True,
     )
     typer.echo(rendered)

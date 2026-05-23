@@ -164,6 +164,40 @@ def test_peek_does_not_invoke_run_task_or_any_llm_client(isolated_home, stub_pee
     google.assert_not_called()
 
 
+_PACKAGED_HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node package="com.binance.dev" bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[40,200][520,320]" class="android.widget.Button" text="Buy" clickable="true"/>
+  </node>
+</hierarchy>
+"""
+
+
+@pytest.fixture
+def stub_peek_packaged(monkeypatch):
+    """Like stub_peek, but the device returns a hierarchy whose topmost node
+    declares package='com.binance.dev'."""
+
+    class FakeUIDevice:
+        serial = "STUB"
+        model = "StubPixel"
+
+        @classmethod
+        def connect(cls, serial: str):
+            obj = cls()
+            obj.serial = serial
+            return obj
+
+        def dump_hierarchy(self) -> str:
+            return _PACKAGED_HIERARCHY
+
+    def fake_list_devices():
+        return [DeviceInfo(serial="STUB", model="StubPixel")]
+
+    monkeypatch.setattr("androidharness.cli.list_devices", fake_list_devices)
+    monkeypatch.setattr("androidharness.cli.UIAutomatorDevice", FakeUIDevice)
+
+
 def test_peek_sibling_collapse_flag_overrides_config(isolated_home, stub_peek_collapsible):
     """Default config has sibling_collapse=False. --sibling-collapse must
     override per-invocation and produce a collapsed line."""
@@ -181,3 +215,22 @@ def test_peek_no_sibling_collapse_flag_overrides_config(isolated_home, stub_peek
     result = runner.invoke(app, ["peek", "--no-sibling-collapse"])
     assert result.exit_code == 0, result.stdout
     assert "× " not in result.stdout
+
+
+def test_peek_foreground_package_flag_overrides_config(isolated_home, stub_peek_packaged):
+    """Default config has foreground_package=False. --foreground-package
+    must add the header for one peek."""
+    result = runner.invoke(app, ["peek", "--foreground-package"])
+    assert result.exit_code == 0, result.stdout
+    assert "# foreground: com.binance.dev" in result.stdout
+
+
+def test_peek_no_foreground_package_flag_overrides_config(isolated_home, stub_peek_packaged):
+    """Inverse: config sets foreground_package=true but --no-foreground-package
+    suppresses for one peek."""
+    cfg = isolated_home / ".androidharness" / "config.yaml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("perception:\n  foreground_package: true\n")
+    result = runner.invoke(app, ["peek", "--no-foreground-package"])
+    assert result.exit_code == 0, result.stdout
+    assert "# foreground:" not in result.stdout
