@@ -63,10 +63,19 @@ class Observation:
                 return n
         raise KeyError(node_id)
 
-    def render(self, *, with_resource_ids: bool = False) -> str:
+    def render(
+        self,
+        *,
+        with_resource_ids: bool = False,
+        sibling_collapse: bool = False,
+    ) -> str:
         from androidharness.render import DEFAULT_RENDERER
 
-        return DEFAULT_RENDERER.observation(self, with_resource_id=with_resource_ids)
+        return DEFAULT_RENDERER.observation(
+            self,
+            with_resource_id=with_resource_ids,
+            sibling_collapse=sibling_collapse,
+        )
 
 
 def _parse_bounds(raw: str) -> tuple[int, int, int, int]:

@@ -262,3 +262,29 @@ def test_parse_captures_enabled_focused_checked_password_state():
     assert by_text["hi"].enabled is True
     assert by_text["Wi-Fi"].enabled is True
     assert by_text["Password"].enabled is True
+
+
+def test_observation_render_threads_sibling_collapse():
+    """Observation.render(sibling_collapse=True) must produce the same
+    collapsed output that ProseRenderer.observation produces directly."""
+    from androidharness.perception import Node, Observation
+
+    def img(id_: int) -> Node:
+        return Node(
+            id=id_,
+            class_name="android.widget.ImageView",
+            text="",
+            content_desc="",
+            resource_id="",
+            bounds=(0, 0, 10, 10),
+            clickable=False,
+            long_clickable=False,
+            scrollable=False,
+            editable=False,
+        )
+
+    obs = Observation(nodes=[img(1), img(2), img(3)])
+    rendered = obs.render(sibling_collapse=True)
+    assert rendered == "[1] ImageView × 3"
+    # Default keeps the old behavior.
+    assert obs.render() == "[1] ImageView\n[2] ImageView\n[3] ImageView"
