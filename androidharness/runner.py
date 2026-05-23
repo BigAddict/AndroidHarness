@@ -49,6 +49,7 @@ def run_task(
     viewport_filter: bool = False,
     resource_id_in_render: bool = False,
     sibling_collapse: bool = False,
+    foreground_package: bool = False,
     policy: Policy | None = None,
     confirmer: Confirmer | None = None,
 ) -> RunOutcome:
@@ -107,6 +108,7 @@ def run_task(
         viewport_filter=viewport_filter,
         resource_id_in_render=resource_id_in_render,
         sibling_collapse=sibling_collapse,
+        foreground_package=foreground_package,
         policy=policy or Policy(),
         confirmer=confirmer or AlwaysRejectConfirmer(),
     )

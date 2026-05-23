@@ -361,6 +361,7 @@ def run_cmd(
         viewport_filter=cfg.perception.viewport_filter,
         resource_id_in_render=cfg.perception.resource_id_in_render,
         sibling_collapse=cfg.perception.sibling_collapse,
+        foreground_package=cfg.perception.foreground_package,
         policy=policy,
         confirmer=confirmer,
     )
