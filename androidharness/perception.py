@@ -56,6 +56,7 @@ class Node:
 @dataclass
 class Observation:
     nodes: list[Node] = field(default_factory=list)
+    foreground_package: str = ""
 
     def resolve(self, node_id: int) -> Node:
         for n in self.nodes:
@@ -148,6 +149,10 @@ def _is_offscreen(
 def parse_hierarchy(xml: str, *, viewport_filter: bool = False) -> Observation:
     root = etree.fromstring(xml.encode("utf-8"))
     obs = Observation()
+    for child in root:
+        if child.tag == "node":
+            obs.foreground_package = child.get("package", "")
+            break
     next_id = 1
 
     # When the viewport filter is on, take the screen rect from the top-level

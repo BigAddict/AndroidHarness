@@ -288,3 +288,45 @@ def test_observation_render_threads_sibling_collapse():
     assert rendered == "[1] ImageView × 3"
     # Default keeps the old behavior.
     assert obs.render() == "[1] ImageView\n[2] ImageView\n[3] ImageView"
+
+
+def test_parse_hierarchy_extracts_foreground_package():
+    """The package attribute on the topmost <node> child of <hierarchy>
+    populates obs.foreground_package."""
+    from androidharness.perception import parse_hierarchy
+
+    xml = (
+        "<?xml version='1.0'?>"
+        "<hierarchy>"
+        "  <node package='com.binance.dev' bounds='[0,0][1000,1000]'>"
+        "    <node class='android.widget.Button' bounds='[0,0][10,10]' clickable='true'/>"
+        "  </node>"
+        "</hierarchy>"
+    )
+    obs = parse_hierarchy(xml)
+    assert obs.foreground_package == "com.binance.dev"
+
+
+def test_parse_hierarchy_foreground_package_empty_when_hierarchy_empty():
+    """<hierarchy></hierarchy> with no node children yields ''."""
+    from androidharness.perception import parse_hierarchy
+
+    xml = "<?xml version='1.0'?><hierarchy></hierarchy>"
+    obs = parse_hierarchy(xml)
+    assert obs.foreground_package == ""
+
+
+def test_parse_hierarchy_foreground_package_empty_when_attr_missing():
+    """Topmost <node> with no package= attribute yields ''."""
+    from androidharness.perception import parse_hierarchy
+
+    xml = (
+        "<?xml version='1.0'?>"
+        "<hierarchy>"
+        "  <node bounds='[0,0][1000,1000]'>"
+        "    <node class='android.widget.Button' bounds='[0,0][10,10]' clickable='true'/>"
+        "  </node>"
+        "</hierarchy>"
+    )
+    obs = parse_hierarchy(xml)
+    assert obs.foreground_package == ""
