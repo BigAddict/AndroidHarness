@@ -47,6 +47,9 @@ class ProseRenderer:
     LLMs handle it well and it doubles as something a human can scan.
     """
 
+    def _short_resource_id(self, rid: str) -> str:
+        return rid.rsplit("/", 1)[-1] if "/" in rid else rid
+
     def node(self, n: Node, *, with_resource_id: bool = False) -> str:
         traits: list[str] = []
         # Editable (EditText) subsumes clickable — don't double-list it
@@ -83,9 +86,7 @@ class ProseRenderer:
             parts.append(label)
 
         if with_resource_id and n.resource_id:
-            rid = n.resource_id
-            short = rid.rsplit("/", 1)[-1] if "/" in rid else rid
-            parts.append(f"#{short}")
+            parts.append(f"#{self._short_resource_id(n.resource_id)}")
 
         return (" ".join(parts) + traits_str).rstrip()
 
@@ -125,9 +126,7 @@ class ProseRenderer:
             if run_len >= 3:
                 parts = [f"[{head.id}]", head.short_class, f"× {run_len}"]
                 if with_resource_id and head.resource_id:
-                    rid = head.resource_id
-                    short = rid.rsplit("/", 1)[-1] if "/" in rid else rid
-                    parts.append(f"#{short}")
+                    parts.append(f"#{self._short_resource_id(head.resource_id)}")
                 lines.append(" ".join(parts))
                 i = run_end
             else:
