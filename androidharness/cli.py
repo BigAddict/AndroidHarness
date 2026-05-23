@@ -350,6 +350,7 @@ def run_cmd(
         quantize_screenshots=cfg.perception.screenshot_quantized,
         viewport_filter=cfg.perception.viewport_filter,
         resource_id_in_render=cfg.perception.resource_id_in_render,
+        sibling_collapse=cfg.perception.sibling_collapse,
         policy=policy,
         confirmer=confirmer,
     )

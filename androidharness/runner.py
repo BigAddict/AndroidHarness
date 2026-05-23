@@ -48,6 +48,7 @@ def run_task(
     quantize_screenshots: bool = False,
     viewport_filter: bool = False,
     resource_id_in_render: bool = False,
+    sibling_collapse: bool = False,
     policy: Policy | None = None,
     confirmer: Confirmer | None = None,
 ) -> RunOutcome:
@@ -105,6 +106,7 @@ def run_task(
         quantize_screenshots=quantize_screenshots,
         viewport_filter=viewport_filter,
         resource_id_in_render=resource_id_in_render,
+        sibling_collapse=sibling_collapse,
         policy=policy or Policy(),
         confirmer=confirmer or AlwaysRejectConfirmer(),
     )
