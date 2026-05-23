@@ -139,6 +139,7 @@ class Agent:
     viewport_filter: bool = False
     resource_id_in_render: bool = False
     sibling_collapse: bool = False
+    foreground_package: bool = False
     policy: Policy = field(default_factory=Policy)
     # AlwaysRejectConfirmer: fail-closed default. If a caller enables `confirm`
     # mode without injecting a real confirmer, the call is rejected rather than
@@ -188,6 +189,7 @@ class Agent:
                 "text": obs.render(
                     with_resource_ids=self.resource_id_in_render,
                     sibling_collapse=self.sibling_collapse,
+                    foreground_package=self.foreground_package,
                 ),
             }
             if screenshot_bytes is not None:
@@ -201,6 +203,7 @@ class Agent:
             if _is_stalled(turn_log, obs.render(
                 with_resource_ids=self.resource_id_in_render,
                 sibling_collapse=self.sibling_collapse,
+                foreground_package=self.foreground_package,
             )):
                 last = turn_log[-1]["tool_call"]
                 warning = (
@@ -257,6 +260,7 @@ class Agent:
                     "observation_summary": obs.render(
                         with_resource_ids=self.resource_id_in_render,
                         sibling_collapse=self.sibling_collapse,
+                        foreground_package=self.foreground_package,
                     ),
                     "observation_payload": dict(obs_payload),  # shallow copy; runner may mutate
                     "tool_call": {"name": call.name, "args": call.args},

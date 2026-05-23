@@ -475,3 +475,49 @@ def test_agent_passes_sibling_collapse_to_renderer():
     agent.run("test")
     assert captured, "agent never sent an observation"
     assert "× 3" in captured[0], f"expected collapsed render, got: {captured[0]!r}"
+
+
+def test_agent_passes_foreground_package_to_renderer():
+    """When Agent.foreground_package=True, the rendered observation the
+    agent sends in `contents` carries the foreground header."""
+    from androidharness.agent import Agent
+    from androidharness.policy import AlwaysApproveConfirmer, Policy
+
+    xml = (
+        "<?xml version='1.0'?>"
+        "<hierarchy>"
+        "  <node package='com.binance.dev' bounds='[0,0][1000,1000]'>"
+        "    <node class='android.widget.Button' bounds='[0,0][10,10]' clickable='true'/>"
+        "  </node>"
+        "</hierarchy>"
+    )
+
+    class _FakeDevice:
+        serial = "fake"
+        model = "fake"
+        def dump_hierarchy(self) -> str:
+            return xml
+        def screenshot(self) -> bytes:
+            return b""
+
+    captured: list[str] = []
+
+    class _CapturingClient:
+        def generate(self, *, model, system_instruction, contents, tools):
+            for c in contents:
+                if c.get("role") == "observation":
+                    captured.append(c["text"])
+            return {"name": "done", "args": {"success": True, "reason": "ok"}}
+
+    agent = Agent(
+        device=_FakeDevice(),
+        client=_CapturingClient(),
+        model="fake",
+        max_turns=1,
+        foreground_package=True,
+        policy=Policy(),
+        confirmer=AlwaysApproveConfirmer(),
+    )
+    agent.run("test")
+    assert captured, "agent never sent an observation"
+    assert captured[0].startswith("# foreground: com.binance.dev\n"), captured[0]
