@@ -31,7 +31,13 @@ class Renderer(Protocol):
 
     def node(self, n: Node, *, with_resource_id: bool = False) -> str: ...
 
-    def observation(self, obs: Observation, *, with_resource_id: bool = False) -> str: ...
+    def observation(
+        self,
+        obs: Observation,
+        *,
+        with_resource_id: bool = False,
+        sibling_collapse: bool = False,
+    ) -> str: ...
 
 
 class ProseRenderer:
@@ -83,7 +89,13 @@ class ProseRenderer:
 
         return (" ".join(parts) + traits_str).rstrip()
 
-    def observation(self, obs: Observation, *, with_resource_id: bool = False) -> str:
+    def observation(
+        self,
+        obs: Observation,
+        *,
+        with_resource_id: bool = False,
+        sibling_collapse: bool = False,
+    ) -> str:
         return "\n".join(self.node(n, with_resource_id=with_resource_id) for n in obs.nodes)
 
 

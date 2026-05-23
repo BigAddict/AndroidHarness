@@ -177,3 +177,16 @@ def test_prose_renderer_state_traits_default_to_normal_for_old_fixtures():
     rendered = r.node(n)
     for tag in ("disabled", "focused", "checked", "password"):
         assert tag not in rendered
+
+
+def test_prose_renderer_observation_accepts_sibling_collapse_keyword_default_false():
+    """The keyword exists and defaults to False — calling without it must
+    behave identically to calling with sibling_collapse=False."""
+    r = ProseRenderer()
+    obs = Observation(nodes=[
+        _node(id=1, cls="android.widget.ImageView", text="", content_desc="", clickable=False),
+        _node(id=2, cls="android.widget.ImageView", text="", content_desc="", clickable=False),
+        _node(id=3, cls="android.widget.ImageView", text="", content_desc="", clickable=False),
+    ])
+    # Default and explicit-False must match.
+    assert r.observation(obs) == r.observation(obs, sibling_collapse=False)
