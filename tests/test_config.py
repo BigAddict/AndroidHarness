@@ -73,6 +73,10 @@ def test_perception_all_compression_steps_off_by_default():
     assert pc.screenshot_quantized is False
 
 
+def test_perception_config_foreground_package_default_false():
+    assert PerceptionConfig().foreground_package is False
+
+
 def test_logging_defaults():
     log = LoggingConfig()
     assert log.level == "INFO"

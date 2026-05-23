@@ -148,11 +148,13 @@ class MemoryConfig(BaseModel):
 
 
 class PerceptionConfig(BaseModel):
-    """Perception feature flags. M6 (sibling_collapse) and M11 (viewport_filter,
-    resource_id_in_render) are live; M16 (screenshot_quantized format) is pending."""
+    """Perception feature flags. M6 (sibling_collapse), M11 (viewport_filter,
+    resource_id_in_render), and M22 (foreground_package) are live; M16
+    (screenshot_quantized format) is pending."""
     model_config = _STRICT
 
     sibling_collapse: bool = False
+    foreground_package: bool = False
     viewport_filter: bool = False
     resource_id_in_render: bool = False
     screenshot_quantized: bool = False
