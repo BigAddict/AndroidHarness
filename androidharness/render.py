@@ -24,9 +24,10 @@ class Renderer(Protocol):
     device access. The contract:
       * `node(n, with_resource_id)` returns the single-node form used as the
         `summary` for diagnostic output.
-      * `observation(obs, with_resource_id)` returns the full Observation
-        rendered as one string. Typically newline-joined `node(...)` calls,
-        but a renderer is free to add headers, group by container, etc.
+      * `observation(obs, with_resource_id, sibling_collapse, foreground_package)`
+        returns the full Observation rendered as one string. Typically
+        newline-joined `node(...)` calls, but a renderer is free to add
+        headers, group by container, etc.
     """
 
     def node(self, n: Node, *, with_resource_id: bool = False) -> str: ...
@@ -137,7 +138,8 @@ class ProseRenderer:
             body = "\n".join(lines)
 
         if foreground_package and obs.foreground_package:
-            return f"# foreground: {obs.foreground_package}\n{body}"
+            header = f"# foreground: {obs.foreground_package}"
+            return f"{header}\n{body}" if body else header
         return body
 
 

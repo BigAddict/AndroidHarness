@@ -68,13 +68,10 @@ def test_memory_disabled_by_default_with_60_day_retention():
 def test_perception_all_compression_steps_off_by_default():
     pc = PerceptionConfig()
     assert pc.sibling_collapse is False
+    assert pc.foreground_package is False
     assert pc.viewport_filter is False
     assert pc.resource_id_in_render is False
     assert pc.screenshot_quantized is False
-
-
-def test_perception_config_foreground_package_default_false():
-    assert PerceptionConfig().foreground_package is False
 
 
 def test_logging_defaults():
