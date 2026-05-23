@@ -171,6 +171,7 @@ uv run androidharness run "..." --policy "tap=confirm,type=deny"
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `sibling_collapse` | bool | `false` | Collapse runs of N≥3 consecutive nodes with the same `class_name` + `resource_id` and empty `text` / `content_desc` into a single `[id] ClassName × N` row in the rendered Observation. Render-time only — the underlying `Observation` is unchanged, so tap dispatch, `peek`, and screenshots are unaffected. A/B with `androidharness peek --sibling-collapse` / `--no-sibling-collapse`. |
+| `foreground_package` | bool | `false` | Prepend `# foreground: <package>` as a header line at the top of every rendered Observation. The package is read from the topmost `<node>` of the UIAutomator dump (the focused window). Gives the model a stable cross-turn signal for which app it's in. A/B with `androidharness peek --foreground-package` / `--no-foreground-package`. |
 | `viewport_filter` | bool | `false` | Drop off-screen and `visibility="gone"` nodes (milestone 11 step 2, but available now — the code is shipped) |
 | `resource_id_in_render` | bool | `false` | Append resource-id suffix to node summaries (milestone 11 step 3) |
 | `screenshot_quantized` | bool | `false` | Quantize screenshots to 256 colors before sending to Gemini |

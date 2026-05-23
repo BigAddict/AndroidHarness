@@ -56,6 +56,7 @@ Items 1–5 are the "v2 minimum" per the spec. Items 6+ are the long tail.
 | 19 | Flow miner — repeated-subsequence detection, candidate generation | Pending | |
 | 20 | Settings UI Flows panel — review, promote, auto-disable | Pending | |
 | 21 | Device seam — RemoteDevice + adb-proxy | Pending (deferred) | Only needed when agent runs off-host |
+| 22 | **Perception foreground-package signal** — `# foreground: <package>` header line read from the topmost `<node>`'s package attribute; render-time only, defaults off, `peek --foreground-package` override. Motivated by the 40-turn Binance failure where the agent had no per-turn signal that it had left `com.binance.dev` | **Shipped** | `637ef49` → `7d5b321` |
 
 ---
 
@@ -70,4 +71,8 @@ A few items landed ahead of their dependency order:
 
 ## Current focus
 
-Milestones 1–6 are complete. The "v2 minimum" block plus perception compression step 1 is shipped. Empirical note: on three reference Samsung One UI screens (settings list, app drawer, notification shade) sibling-collapse triggered on zero runs because nearly every node carries an accessibility label — see the M6 spec's Measurements section. The seam ships clean for any future screens that do present empty-label runs. Milestone 7 (storage seam — SQLiteSink + alembic migrations) is the next planned item.
+Milestones 1–6 and 22 are complete. The "v2 minimum" block, perception compression step 1, and the foreground-package signal are shipped. Empirical notes:
+- Sibling-collapse triggered on zero runs against three reference Samsung One UI screens (every node carries an accessibility label). The seam ships clean for any future screens that do present empty-label runs.
+- Foreground-package extracts `com.android.settings` / `com.sec.android.app.launcher` / `com.android.systemui` from the three reference screens — clean signal at ~10 tokens per turn. Validated the M22 hypothesis that the topmost `<node>`'s `package` attribute is a reliable focused-window identifier.
+
+Milestone 23 (token tracking + spend visibility) is the next planned item — its spec and plan landed alongside M22.
