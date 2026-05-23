@@ -190,3 +190,88 @@ def test_prose_renderer_observation_accepts_sibling_collapse_keyword_default_fal
     ])
     # Default and explicit-False must match.
     assert r.observation(obs) == r.observation(obs, sibling_collapse=False)
+
+
+def _imgview(id: int, resource_id: str = "", text: str = "", content_desc: str = "") -> Node:
+    return _node(
+        id=id,
+        cls="android.widget.ImageView",
+        text=text,
+        content_desc=content_desc,
+        resource_id=resource_id,
+        clickable=False,
+    )
+
+
+def test_sibling_collapse_run_of_three_emits_single_line():
+    r = ProseRenderer()
+    obs = Observation(nodes=[_imgview(1), _imgview(2), _imgview(3)])
+    assert r.observation(obs, sibling_collapse=True) == "[1] ImageView × 3"
+
+
+def test_sibling_collapse_run_below_threshold_renders_each_node():
+    r = ProseRenderer()
+    obs = Observation(nodes=[_imgview(1), _imgview(2)])
+    rendered = r.observation(obs, sibling_collapse=True)
+    assert rendered == "[1] ImageView\n[2] ImageView"
+
+
+def test_sibling_collapse_disabled_renders_each_node():
+    r = ProseRenderer()
+    obs = Observation(nodes=[_imgview(1), _imgview(2), _imgview(3)])
+    # Disabled (the default) renders each node verbatim.
+    assert r.observation(obs) == "[1] ImageView\n[2] ImageView\n[3] ImageView"
+
+
+def test_sibling_collapse_mixed_class_breaks_run():
+    """Two ImageViews, a TextView, then three ImageViews. Only the last three
+    collapse (run of 2 + singleton + run of 3)."""
+    r = ProseRenderer()
+    obs = Observation(nodes=[
+        _imgview(1),
+        _imgview(2),
+        _node(id=3, cls="android.widget.TextView", text="", content_desc="", clickable=False),
+        _imgview(4),
+        _imgview(5),
+        _imgview(6),
+    ])
+    rendered = r.observation(obs, sibling_collapse=True)
+    assert rendered == "[1] ImageView\n[2] ImageView\n[3] TextView\n[4] ImageView × 3"
+
+
+def test_sibling_collapse_text_breaks_run():
+    """Middle node has text='X' — no run forms; each line renders normally."""
+    r = ProseRenderer()
+    obs = Observation(nodes=[
+        _imgview(1),
+        _imgview(2, text="X"),
+        _imgview(3),
+    ])
+    rendered = r.observation(obs, sibling_collapse=True)
+    assert rendered == '[1] ImageView\n[2] ImageView "X"\n[3] ImageView'
+
+
+def test_sibling_collapse_resource_id_in_collapsed_line():
+    """With with_resource_id=True and a shared non-empty resource_id, the
+    collapsed line carries #rid_short."""
+    r = ProseRenderer()
+    obs = Observation(nodes=[
+        _imgview(1, resource_id="com.example:id/icon"),
+        _imgview(2, resource_id="com.example:id/icon"),
+        _imgview(3, resource_id="com.example:id/icon"),
+    ])
+    rendered = r.observation(obs, with_resource_id=True, sibling_collapse=True)
+    assert rendered == "[1] ImageView × 3 #icon"
+
+
+def test_sibling_collapse_run_at_end_of_list():
+    """Off-by-one guard: a run ending at the last node still collapses."""
+    r = ProseRenderer()
+    obs = Observation(nodes=[
+        _node(id=1, cls="android.widget.TextView", text="Header", content_desc="", clickable=False),
+        _imgview(2),
+        _imgview(3),
+        _imgview(4),
+    ])
+    rendered = r.observation(obs, sibling_collapse=True)
+    assert rendered == '[1] TextView "Header"\n[2] ImageView × 3'
