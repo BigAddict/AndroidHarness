@@ -164,6 +164,11 @@ def peek_cmd(
         "--with-resource-ids/--no-resource-ids",
         help="Append the resource-id to each node. Default: cfg.perception.resource_id_in_render.",
     ),
+    sibling_collapse: bool | None = typer.Option(
+        None,
+        "--sibling-collapse/--no-sibling-collapse",
+        help="Collapse runs of N≥3 identical sibling nodes. Default: cfg.perception.sibling_collapse.",  # noqa: E501
+    ),
     raw_xml: bool = typer.Option(
         False,
         "--raw-xml",
@@ -190,6 +195,11 @@ def peek_cmd(
         if with_resource_ids is not None
         else cfg.perception.resource_id_in_render
     )
+    sc = (
+        sibling_collapse
+        if sibling_collapse is not None
+        else cfg.perception.sibling_collapse
+    )
 
     infos = list_devices()
     if not infos:
@@ -204,11 +214,11 @@ def peek_cmd(
         return
 
     obs = parse_hierarchy(xml, viewport_filter=vf)
-    rendered = DEFAULT_RENDERER.observation(obs, with_resource_id=rids)
+    rendered = DEFAULT_RENDERER.observation(obs, with_resource_id=rids, sibling_collapse=sc)
     # Header goes to stderr so the rendered body on stdout stays pipeable.
     typer.echo(
         f"# {len(obs.nodes)} nodes (viewport_filter={vf}, resource_ids={rids}, "
-        f"~{len(rendered)} chars)",
+        f"sibling_collapse={sc}, ~{len(rendered)} chars)",
         err=True,
     )
     typer.echo(rendered)

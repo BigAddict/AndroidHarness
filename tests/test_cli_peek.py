@@ -23,6 +23,16 @@ _HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 </hierarchy>
 """
 
+_COLLAPSIBLE_HIERARCHY = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node bounds="[0,0][1080,2400]" class="android.widget.FrameLayout" clickable="false">
+    <node bounds="[0,0][100,100]" class="android.widget.ImageView" clickable="true"/>
+    <node bounds="[100,0][200,100]" class="android.widget.ImageView" clickable="true"/>
+    <node bounds="[200,0][300,100]" class="android.widget.ImageView" clickable="true"/>
+  </node>
+</hierarchy>
+"""
+
 
 @pytest.fixture
 def isolated_home(tmp_path, monkeypatch) -> Path:
@@ -48,6 +58,31 @@ def stub_peek(monkeypatch):
 
         def dump_hierarchy(self) -> str:
             return _HIERARCHY
+
+    def fake_list_devices():
+        return [DeviceInfo(serial="STUB", model="StubPixel")]
+
+    monkeypatch.setattr("androidharness.cli.list_devices", fake_list_devices)
+    monkeypatch.setattr("androidharness.cli.UIAutomatorDevice", FakeUIDevice)
+
+
+@pytest.fixture
+def stub_peek_collapsible(monkeypatch):
+    """Like stub_peek, but the device returns a hierarchy with 3 identical
+    ImageView siblings (a collapsible run)."""
+
+    class FakeUIDevice:
+        serial = "STUB"
+        model = "StubPixel"
+
+        @classmethod
+        def connect(cls, serial: str):
+            obj = cls()
+            obj.serial = serial
+            return obj
+
+        def dump_hierarchy(self) -> str:
+            return _COLLAPSIBLE_HIERARCHY
 
     def fake_list_devices():
         return [DeviceInfo(serial="STUB", model="StubPixel")]
@@ -127,3 +162,22 @@ def test_peek_does_not_invoke_run_task_or_any_llm_client(isolated_home, stub_pee
     lite.assert_not_called()
     router.assert_not_called()
     google.assert_not_called()
+
+
+def test_peek_sibling_collapse_flag_overrides_config(isolated_home, stub_peek_collapsible):
+    """Default config has sibling_collapse=False. --sibling-collapse must
+    override per-invocation and produce a collapsed line."""
+    result = runner.invoke(app, ["peek", "--sibling-collapse"])
+    assert result.exit_code == 0, result.stdout
+    assert "× 3" in result.stdout
+
+
+def test_peek_no_sibling_collapse_flag_overrides_config(isolated_home, stub_peek_collapsible):
+    """Inverse: config sets sibling_collapse=true but --no-sibling-collapse
+    suppresses for one peek."""
+    cfg = isolated_home / ".androidharness" / "config.yaml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("perception:\n  sibling_collapse: true\n")
+    result = runner.invoke(app, ["peek", "--no-sibling-collapse"])
+    assert result.exit_code == 0, result.stdout
+    assert "× " not in result.stdout
