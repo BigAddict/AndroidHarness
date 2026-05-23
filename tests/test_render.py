@@ -109,7 +109,7 @@ def test_renderer_protocol_accepts_a_custom_implementation():
             tag = f"#{n.resource_id.rsplit('/', 1)[-1]}" if with_resource_id and n.resource_id else ""
             return f"{n.id}:{n.short_class}:{label}{tag}"
 
-        def observation(self, obs: Observation, *, with_resource_id: bool = False) -> str:
+        def observation(self, obs: Observation, *, with_resource_id: bool = False, sibling_collapse: bool = False) -> str:
             return "\n".join(self.node(n, with_resource_id=with_resource_id) for n in obs.nodes)
 
     r: Renderer = CompactRenderer()
