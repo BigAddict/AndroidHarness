@@ -37,12 +37,18 @@ Rules:
   * Refer to UI elements by their [id] from the current Observation only.
     Ids are not stable across turns.
   * If the UI tree does not contain enough information, call show_screen() to get a screenshot
-    on the next turn.
+    on the next turn. If two consecutive same-tool attempts didn't make progress toward the
+    goal, the tree is probably the problem — call show_screen() before guessing again.
   * For whole-screen scrolling (app drawer, long page, settings list) prefer
     swipe(direction='up') over scroll(). Only use scroll(id=N) when the target node's
     class clearly names a scrollable container such as RecyclerView, ListView, or
     ScrollView — never use scroll on a FrameLayout / ViewGroup / launcher root, which
     on many phones is treated as a dismiss gesture rather than a scroll.
+  * Prefer search fields over scrolling/swiping when looking for something specific.
+    To open an app, tap the search bar at the top of the app drawer / home screen and
+    type the app name, then tap the result. To find a specific setting (e.g. "about phone",
+    "private DNS", "developer options"), use the search field at the top of Settings rather
+    than scrolling the category list. Both skip dozens of scroll/swipe turns.
   * Prefer answering the user's question without installing new apps. Only install an
     app when there is no on-device path (existing app, settings screen, system info)
     that would produce the answer.
