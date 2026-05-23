@@ -40,7 +40,7 @@ Items 1–5 are the "v2 minimum" per the spec. Items 6+ are the long tail.
 | 3 | Throttler — token-bucket + Router fallback | **Shipped** | `61ea308`, `ae02883`, `e1b1ac0`, `2c1c74b`, `f88e55e` |
 | 4 | Policy seam — destructive-action gating | **Shipped** | `af1233c`, `181cbcd`, `1f4c813`, `70b1445` |
 | 5 | **Web UI v2.0 — Settings UI** — FastAPI + HTMX editor for providers, models, throttler, policy, devices, logging, general defaults | **Shipped** | `04a61e7` → `1d0bba4` |
-| 6 | Perception compression step 1 — sibling collapse | Pending | |
+| 6 | **Perception compression step 1 — sibling collapse** — `[id] ClassName × N` collapse on runs of ≥3 identical-class siblings with empty labels; render-time only, defaults off, `peek --sibling-collapse` override | **Shipped** | `eccede2` → `d639add` |
 | 7 | Storage seam — SQLiteSink + alembic migrations | Pending | |
 | 8 | Web UI v2.1 — live monitoring | Pending | |
 | 9 | OTel spans + JSON exporter | Pending | |
@@ -70,4 +70,4 @@ A few items landed ahead of their dependency order:
 
 ## Current focus
 
-Milestones 1–5 are complete. The "v2 minimum" block is shipped. Milestone 6 (perception compression step 1 — sibling collapse) is the next planned item.
+Milestones 1–6 are complete. The "v2 minimum" block plus perception compression step 1 is shipped. Empirical note: on three reference Samsung One UI screens (settings list, app drawer, notification shade) sibling-collapse triggered on zero runs because nearly every node carries an accessibility label — see the M6 spec's Measurements section. The seam ships clean for any future screens that do present empty-label runs. Milestone 7 (storage seam — SQLiteSink + alembic migrations) is the next planned item.

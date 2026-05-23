@@ -80,8 +80,8 @@ Key types:
 
 The seam between the typed perception layer and the text the LLM actually sees. Lets us experiment with denser formats (TOON, YAML-columnar, JSON-lines, …) without touching perception logic.
 
-- `Renderer` Protocol — `node(n, with_resource_id)` and `observation(obs, with_resource_id)` return strings. Pure functions of the Observation; no I/O.
-- `ProseRenderer` — the v1 format. Each node is one line: `[id] ClassName "label" #resource_id (traits)`. Resource-id and traits are optional.
+- `Renderer` Protocol — `node(n, with_resource_id)` and `observation(obs, with_resource_id, sibling_collapse)` return strings. Pure functions of the Observation; no I/O.
+- `ProseRenderer` — the v1 format. Each node is one line: `[id] ClassName "label" #resource_id (traits)`. Resource-id and traits are optional. Sibling-collapse (config: `perception.sibling_collapse`) collapses runs of N≥3 consecutive nodes with the same `class_name` + `resource_id` and no distinguishing `text` / `content_desc` into a single `[id] ClassName × N` row — saves tokens on app drawers and notification shades without changing the underlying Observation.
 - `DEFAULT_RENDERER = ProseRenderer()` — the singleton every caller resolves through. Replace via DI on the agent when benchmarking alternatives.
 
 Ship a new renderer only after a fixture-driven benchmark proves both a token-count win **and** no tool-call accuracy regression on the existing test set (per v2 spec §7 step 4).
@@ -91,7 +91,7 @@ Ship a new renderer only after a fixture-driven benchmark proves both a token-co
 The agent loop and the Gemini API adapter.
 
 `Agent` dataclass (`agent.py:117`):
-- Fields: `device`, `client`, `model`, `max_turns`, `wall_clock_s`, `quantize_screenshots`, `viewport_filter`, `resource_id_in_render`, `policy`, `confirmer`
+- Fields: `device`, `client`, `model`, `max_turns`, `wall_clock_s`, `quantize_screenshots`, `viewport_filter`, `resource_id_in_render`, `sibling_collapse`, `policy`, `confirmer`
 - `run(task, on_turn=None)` — the main loop. Returns a `RunResult` with `status` (`done`|`max_turns`|`timeout`), `success`, `reason`, `turns`, `turn_log`.
 
 Loop behavior per turn:
