@@ -157,4 +157,31 @@ The measurement script itself has no tests; it's a one-off operational tool.
 
 ## Measurements
 
-_To be filled in before the milestone is marked Shipped._
+Captured on 2026-05-23 from a real device (Samsung, serial `R92XA0AB89Y`) via `adb shell uiautomator dump`. Fixtures committed at `tests/fixtures/screens/{settings_list,app_drawer,notification_shade}.xml`. Script: `scripts/measure_perception.py`.
+
+```
+## settings_list
+parse                flag                      nodes    chars   ~tokens
+raw                  sibling_collapse=False       34     1673       418
+raw                  sibling_collapse=True        34     1673       418
+viewport_filter      sibling_collapse=False       34     1673       418
+viewport_filter      sibling_collapse=True        34     1673       418
+
+## app_drawer
+parse                flag                      nodes    chars   ~tokens
+raw                  sibling_collapse=False       38     1963       490
+raw                  sibling_collapse=True        38     1963       490
+viewport_filter      sibling_collapse=False       38     1963       490
+viewport_filter      sibling_collapse=True        38     1963       490
+
+## notification_shade
+parse                flag                      nodes    chars   ~tokens
+raw                  sibling_collapse=False       61     3672       918
+raw                  sibling_collapse=True        61     3672       918
+viewport_filter      sibling_collapse=False       61     3672       918
+viewport_filter      sibling_collapse=True        61     3672       918
+```
+
+**Interpretation.** Across the three reference screens, sibling-collapse triggered on zero runs and saved zero tokens. Direct inspection of the parsed Observations explains why: settings_list has only 2 nodes lacking text/content_desc (and they are not adjacent); app_drawer has 1; notification_shade has 10 (scattered, no class+resource-id-matching adjacent triple). Modern Android — Samsung One UI in this sample — labels essentially every node for accessibility services, so the empty-text guard (correctly) refuses to collapse them. The notional "60 ImageView icons with empty labels" from the parent spec was a hypothetical that real screens don't currently produce.
+
+The implementation still ships: the seam is correct, the flag defaults to `False` so there is zero cost when it doesn't help, and the optimization will activate cleanly on any future screen that does present an empty-label run (e.g., a media player with six unlabeled `ImageView` transport buttons). Treat this as a no-regret addition with empirically zero current benefit on the screens measured. A follow-up that loosens the guard (e.g., collapsing runs that share `class_name` + `resource_id` but with the agent-visible label coming from a single ancestor) is a candidate for a future milestone if token pressure on accessibility-labeled lists becomes a constraint.
