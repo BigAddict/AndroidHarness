@@ -148,7 +148,8 @@ class MemoryConfig(BaseModel):
 
 
 class PerceptionConfig(BaseModel):
-    """Placeholder — toggles flip on as milestones 6, 11, 16 land."""
+    """Perception feature flags. M6 (sibling_collapse) and M11 (viewport_filter,
+    resource_id_in_render) are live; M16 (screenshot_quantized format) is pending."""
     model_config = _STRICT
 
     sibling_collapse: bool = False
