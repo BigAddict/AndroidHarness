@@ -38,6 +38,7 @@ def main() -> None:
                     len(text) // 4,
                 ))
         print(f"## {name}")
+        print(f"foreground: {obs_raw.foreground_package or '(none)'}")
         print(f"{'parse':<20} {'flag':<24} {'nodes':>6} {'chars':>8} {'~tokens':>9}")
         for r in rows:
             print(f"{r[0]:<20} {r[1]:<24} {r[2]:>6} {r[3]:>8} {r[4]:>9}")

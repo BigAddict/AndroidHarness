@@ -154,4 +154,19 @@ Recorded in the Measurements section below before the milestone ships.
 
 ## Measurements
 
-_To be filled in before the milestone is marked Shipped._
+Captured on 2026-05-23 by running `uv run python scripts/measure_perception.py` against the three reference XMLs from M6 (Samsung One UI device, serial `R92XA0AB89Y`).
+
+```
+## settings_list
+foreground: com.android.settings
+
+## app_drawer
+foreground: com.sec.android.app.launcher
+
+## notification_shade
+foreground: com.android.systemui
+```
+
+All three predictions from the spec hold: Settings is `com.android.settings`, the Samsung One UI launcher's app drawer is `com.sec.android.app.launcher`, and the notification shade is `com.android.systemui`. The model now has a stable per-turn signal that distinguishes "I'm inside Settings", "I'm on the launcher", and "I'm looking at the system UI" — three states that previously looked like anonymous trees with no app identity attached.
+
+Token cost is negligible: the header is exactly `"# foreground: " + package + "\n"`, ~30–40 characters per turn. On the longest Samsung package names that's ≤10 tokens per turn — well below the noise floor of the renderer's existing per-node output.
